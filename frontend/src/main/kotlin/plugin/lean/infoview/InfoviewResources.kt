@@ -6,7 +6,7 @@ import com.intellij.ui.jcef.utils.JBCefStreamResourceHandler
 import org.cef.browser.CefBrowser
 import org.cef.browser.CefFrame
 import org.cef.handler.CefRequestHandlerAdapter
-import org.cef.handler.CefResourceHandlerAdapter
+import org.cef.handler.CefResourceHandler
 import org.cef.handler.CefResourceRequestHandlerAdapter
 import org.cef.misc.BoolRef
 import org.cef.misc.IntRef
@@ -44,7 +44,7 @@ internal class InfoviewResources(private val parent: Disposable) : CefRequestHan
         }
     }
 
-    private fun resource(uri: URI): CefResourceHandlerAdapter {
+    private fun resource(uri: URI): CefResourceHandler {
         val path = uri.path.removePrefix("/")
         val allowed = path.split('/').none { it == "." || it == ".." } && '\\' !in path && '\u0000' !in path
         val bytes = if (allowed) javaClass.getResourceAsStream("/lean/infoview/$path")?.use { it.readBytes() } else null

@@ -1,6 +1,6 @@
 # Lean 4 for JetBrains
 
-Lean 4 support for IntelliJ IDEA, with interactive proof goals, native code completion and navigation,
+Lean 4 support for JetBrains IDEs, with interactive proof goals, native code completion and navigation,
 Unicode input, and tools for managing Lean projects.
 
 ## Features
@@ -21,8 +21,9 @@ and import optimization require support from its language server.
 
 ### Requirements
 
-- IntelliJ IDEA 2026.2.4, or a compatible IntelliJ Platform IDE with LSP support and the JCEF browser runtime.
-  Use the bundled JetBrains Runtime for InfoView.
+- IntelliJ IDEA, PyCharm, WebStorm, PhpStorm, RubyMine, GoLand, CLion, Rider, RustRover, DataGrip, or DataSpell.
+  Supported platform builds are `261.26222` through `263.*`: generally **2026.1.4 through 2026.3**;
+  DataSpell **2026.1.3.1** is also supported. Use the bundled JetBrains Runtime for InfoView.
 - [Elan](https://github.com/leanprover/elan) with `dump-state` support and an installed Lean 4 toolchain.
   For remote development, install these on the project host.
 - Git for Git-based Lake dependencies and project templates. Fetching dependencies also requires internet access.
@@ -148,22 +149,28 @@ Browsing dependency sources under **External Libraries** may be unavailable with
 
 ## Building the plugin
 
-Use JDK 25 and the Gradle wrapper:
+Use JDK 21 and the Gradle wrapper:
 
 ```sh
 ./gradlew buildPlugin
 ```
 
 The installable ZIP is written to `build/distributions`. On Windows, use `gradlew.bat`.
+GitHub Actions builds the plugin on pushes and pull requests. The ZIP is also available as the `plugin.lean`
+artifact of a successful **Build** workflow run in the repository's **Actions** tab.
 Gradle manages the IDE SDK and Node.js/npm used to generate the bundled InfoView assets.
 The installed plugin runs InfoView in the IDE's browser runtime and does not need Node.js.
 Building the plugin and running unit tests do not require an installed Lean toolchain or elan.
 
-To run the tests and plugin checks:
+To run the tests and check the plugin package:
 
 ```sh
-./gradlew test verifyPluginStructure verifyPlugin
+./gradlew test verifyPluginStructure
 ```
+
+Run `./gradlew verifyPlugin` to check binary compatibility across the configured IDE versions.
+This separate check downloads the IDEs it verifies. To check specific versions, pass a comma-separated list,
+for example `./gradlew verifyPlugin -PverificationIdes=IU-2026.1.4,WS-2026.3`.
 
 ## Acknowledgments
 

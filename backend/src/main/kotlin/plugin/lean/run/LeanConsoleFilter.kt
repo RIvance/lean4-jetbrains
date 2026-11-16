@@ -21,8 +21,8 @@ class LeanConsoleFilter(private val project: Project, private val directory: Pat
             return null
         }
         val hyperlink = object : LazyFileHyperlinkInfo(project, path.toString(), documentLine, documentColumn) {
-            override fun calculateOffset(document: Document, documentLine: Int, documentColumn: Int): Int? {
-                if (documentLine >= document.lineCount) return null
+            override fun calculateOffset(document: Document?, documentLine: Int, documentColumn: Int): Int? {
+                if (document == null || documentLine >= document.lineCount) return null
                 val start = document.getLineStartOffset(documentLine)
                 val end = document.getLineEndOffset(documentLine)
                 val text = document.charsSequence

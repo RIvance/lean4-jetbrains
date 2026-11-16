@@ -7,7 +7,7 @@ plugins {
 }
 
 java {
-    toolchain.languageVersion = JavaLanguageVersion.of(25)
+    toolchain.languageVersion = JavaLanguageVersion.of(21)
 }
 
 // Keep Scala and its Java boundary types in one compilation unit and one class-output directory.

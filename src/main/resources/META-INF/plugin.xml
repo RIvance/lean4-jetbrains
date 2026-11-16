@@ -18,6 +18,8 @@
         Toolchains and Lean processes run on the project host, including in remote development.
     ]]></description>
 
+    <depends>com.intellij.modules.platform</depends>
+
     <content>
         <module name="plugin.lean.tooling" loading="embedded"/>
         <module name="plugin.lean.shared" loading="required"/>
