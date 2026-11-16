@@ -1,0 +1,41 @@
+<idea-plugin>
+    <dependencies>
+        <module name="intellij.platform.backend"/>
+        <module name="intellij.platform.kernel.backend"/>
+        <module name="plugin.lean.shared"/>
+        <module name="plugin.lean.tooling"/>
+
+        <module name="intellij.platform.lsp"/>
+    </dependencies>
+
+    <extensions defaultExtensionNs="com.intellij">
+        <moduleBuilder builderClass="plugin.lean.project.LeanProjectModuleBuilder"/>
+        <projectService serviceImplementation="plugin.lean.lsp.LeanLspEditorSession" client="all"/>
+        <additionalLibraryRootsProvider implementation="plugin.lean.project.LeanProjectRootsProvider"/>
+        <directoryIndexExcludePolicy implementation="plugin.lean.project.LeanCacheExcludePolicy"/>
+        <configurationType implementation="plugin.lean.run.LakeConfigurationType"/>
+        <programRunner implementation="plugin.lean.run.LakeProgramRunner"/>
+        <runConfigurationProducer implementation="plugin.lean.run.LakeConfigurationProducer"/>
+        <completion.contributor language="Lean4" implementationClass="plugin.lean.language.LeanUnicodeCompletion"
+                                order="first"/>
+        <platform.backend.documentation.targetProvider implementation="plugin.lean.language.LeanUnicodeDocumentation"/>
+        <codeInsight.declarativeInlayProvider language="Lean4" providerId="lean.server.hints"
+                                             implementationClass="plugin.lean.editor.LeanInlayHintsProvider"
+                                             isEnabledByDefault="true" group="OTHER_GROUP"
+                                             bundle="messages.LeanInlayBundle" nameKey="inlays.name"
+                                             descriptionKey="inlays.description"/>
+        <codeInsight.inlayActionHandler handlerId="lean.inlay.actions"
+                                       implementationClass="plugin.lean.editor.LeanInlayActionHandler"/>
+        <platform.rpc.backend.remoteApiProvider implementation="plugin.lean.rpc.BackendLeanApiProvider"/>
+        <platform.lsp.integrationProvider implementation="plugin.lean.lsp.LeanLspIntegrationProvider"/>
+        <lang.importOptimizer language="Lean4" implementationClass="plugin.lean.lsp.LeanImportOptimizer"/>
+        <postStartupActivity implementation="plugin.lean.lsp.LeanProjectActivity"/>
+    </extensions>
+
+    <actions>
+        <action id="Lean.InsertInlayHint" class="plugin.lean.editor.LeanInsertInlayHintAction"
+                text="Insert Lean Hint" description="Apply the source edits supplied by this Lean hint">
+            <add-to-group group-id="InlayMenu" anchor="first"/>
+        </action>
+    </actions>
+</idea-plugin>

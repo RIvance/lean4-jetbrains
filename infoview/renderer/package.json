@@ -1,0 +1,41 @@
+{
+    "name": "@leanprover/infoview",
+    "description": "An interactive display for the Lean 4 theorem prover.",
+    "repository": {
+        "type": "git",
+        "url": "https://github.com/leanprover/vscode-lean4.git"
+    },
+    "type": "module",
+    "license": "Apache-2.0",
+    "version": "0.14.0-jetbrains.1",
+    "private": true,
+    "exports": {
+        ".": {
+            "types": "./dist/index.d.ts",
+            "default": "./dist/index.production.min.js"
+        },
+        "./loader": {
+            "types": "./dist/loader.d.ts",
+            "default": "./dist/loader.production.min.js"
+        }
+    },
+    "dependencies": {
+        "@floating-ui/react": "0.26.25",
+        "@leanprover/infoview-api": "0.13.0",
+        "@vscode-elements/react-elements": "0.5.0",
+        "@vscode/codicons": "0.0.40",
+        "es-module-lexer": "1.5.4",
+        "es-module-shims": "2.8.0",
+        "highlightjs-lean": "1.2.0",
+        "mathjax-full": "3.2.2",
+        "react": "18.3.1",
+        "react-dom": "18.3.1",
+        "react-fast-compare": "3.2.2",
+        "react-markdown": "9.0.1",
+        "react-syntax-highlighter": "15.6.6",
+        "rehype-mathjax": "7.1.0",
+        "remark-math": "6.0.0",
+        "tachyons": "4.12.0",
+        "vscode-languageserver-protocol": "3.17.5"
+    }
+}

@@ -1,0 +1,14 @@
+This distribution includes a modified build of @leanprover/infoview 0.14.0,
+from https://github.com/leanprover/vscode-lean4,
+revision 363e8cc9c0993fc036044bb475d69e1a2ed2465a.
+The renderer source is included in infoview/renderer/src. The JetBrains change
+invalidates displayed information on document changes, including edits that
+leave the caret position and diagnostics unchanged. Production bundles are
+generated locally with the dependency versions recorded in package-lock.json.
+The upstream project is licensed under Apache-2.0. Its license is included as
+lean-infoview-LICENSE.txt. Copyright and license notices in the JavaScript
+bundles are retained. Available licenses from the bundled runtime dependency
+packages are included in the dependencies directory.
+
+The editor host integration is part of Lean 4 for JetBrains. It provides the
+upstream InfoView's EditorApi through the IntelliJ Platform.

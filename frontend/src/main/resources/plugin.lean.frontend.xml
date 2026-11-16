@@ -1,0 +1,116 @@
+<idea-plugin>
+    <dependencies>
+        <module name="intellij.platform.frontend"/>
+        <module name="intellij.platform.ui.jcef"/>
+        <module name="plugin.lean.shared"/>
+        <module name="plugin.lean.tooling"/>
+    </dependencies>
+
+    <extensions defaultExtensionNs="com.intellij">
+        <postStartupActivity implementation="plugin.lean.infoview.LeanInfoviewStartupActivity"/>
+        <postStartupActivity implementation="plugin.lean.editor.LeanProofFoldingStartupActivity"/>
+        <projectConfigurable id="plugin.lean.project" parentId="language" displayName="Lean"
+                             instance="plugin.lean.settings.LeanProjectConfigurable" nonDefaultProject="true"/>
+        <colorSettingsPage implementation="plugin.lean.settings.LeanColorSettingsPage"/>
+        <applicationConfigurable id="plugin.lean.unicode" parentId="editor" displayName="Lean Unicode Input"
+                                 instance="plugin.lean.settings.UnicodeInputConfigurable"/>
+        <!-- If the plugin is published on JetBrains Marketplace, errors reported by users are available on the plugin page.
+             See https://plugins.jetbrains.com/docs/marketplace/error-handler.html#developers-side for details. -->
+        <errorHandler implementation="com.intellij.diagnostic.JetBrainsMarketplaceErrorReportSubmitter"/>
+        <toolWindow id="Lean" factoryClass="plugin.lean.LeanToolWindowFactory"
+                    icon="plugin.lean.language.LeanIcons.LEAN" anchor="right"/>
+    </extensions>
+
+    <actions>
+        <action id="Lean.FoldAllProofs" class="plugin.lean.editor.LeanProofFoldingAction$Fold"
+                text="Fold All Lean Proofs" description="Collapse the current file’s proof folds reported by Lean">
+            <add-to-group group-id="FoldingGroup" anchor="last"/>
+        </action>
+        <action id="Lean.UnfoldAllProofs" class="plugin.lean.editor.LeanProofFoldingAction$Unfold"
+                text="Unfold All Lean Proofs" description="Expand the current file’s proof folds reported by Lean">
+            <add-to-group group-id="FoldingGroup" anchor="last"/>
+        </action>
+        <action id="Lean.SearchLoogle" class="plugin.lean.search.SearchLoogleAction"
+                text="Search Loogle" description="Search Lean and Mathlib definitions and theorems online"
+                icon="AllIcons.Actions.Search">
+            <add-to-group group-id="ToolsMenu" anchor="last"/>
+            <add-to-group group-id="EditorPopupMenu" anchor="last"/>
+        </action>
+        <group id="Lean.ProjectActions" text="Lean Project" popup="true">
+            <add-to-group group-id="ToolsMenu" anchor="last"/>
+            <add-to-group group-id="ProjectViewPopupMenu" anchor="last"/>
+            <action id="Lean.Project.Build" class="plugin.lean.run.LakeProjectAction$Build"
+                    text="Build Lean Project"
+                    description="Run Lake build in the selected file or folder’s project" icon="AllIcons.Actions.Compile"/>
+            <action id="Lean.Project.Clean" class="plugin.lean.run.LakeProjectAction$Clean"
+                    text="Clean Lean Project"
+                    description="Remove the selected Lake project’s build outputs"/>
+            <action id="Lean.Project.Test" class="plugin.lean.run.LakeProjectAction$Test"
+                    text="Test Lean Project"
+                    description="Run the selected Lake project’s tests"/>
+            <action id="Lean.Project.Update" class="plugin.lean.run.LakeProjectAction$Update"
+                    text="Update Lean Project Dependencies"
+                    description="Update the selected Lake project’s dependencies"/>
+            <separator/>
+            <action id="Lean.Project.FetchCache" class="plugin.lean.run.LakeProjectAction$FetchCache"
+                    text="Fetch Mathlib Build Cache"
+                    description="Run Lake’s cache executable to download the selected project’s Mathlib build cache"/>
+            <action id="Lean.Project.FetchSelectedFileCaches" class="plugin.lean.run.FetchLeanFileCacheAction$SelectedFiles"
+                    text="Fetch Mathlib Cache for Selected Files"
+                    description="Fetch build cache for the selected Lean files and their imports">
+                <add-to-group group-id="EditorPopupMenu" anchor="last"/>
+            </action>
+            <action id="Lean.Project.FetchOpenFileCaches" class="plugin.lean.run.FetchLeanFileCacheAction$OpenFiles"
+                    text="Fetch Mathlib Cache for Open Lean Files"
+                    description="Fetch build cache for open Lean files and their imports, grouped by Lake workspace"/>
+        </group>
+        <group id="Lean.InfoViewActions" text="Lean InfoView" popup="true">
+            <add-to-group group-id="ToolsMenu" anchor="last"/>
+            <action id="Lean.ShowInfoView" class="plugin.lean.infoview.ShowLeanInfoviewAction"
+                    text="Show Lean InfoView" description="Show Lean goals and messages"
+                    icon="plugin.lean.language.LeanIcons.LEAN"/>
+            <action id="Lean.ReloadInfoView" class="plugin.lean.infoview.ReloadLeanInfoviewAction"
+                    text="Reload Lean InfoView" description="Reload InfoView and reconnect to the existing Lean servers"
+                    icon="AllIcons.Actions.Refresh"/>
+            <separator/>
+            <action id="Lean.InfoView.TogglePin" class="plugin.lean.infoview.LeanInfoviewAction$TogglePin"
+                    text="Toggle Pin in Lean InfoView" description="Pin or unpin the position displayed in InfoView"/>
+            <action id="Lean.InfoView.TogglePaused" class="plugin.lean.infoview.LeanInfoviewAction$TogglePaused"
+                    text="Pause or Resume Lean InfoView" description="Pause or resume updates to the main goal view"/>
+            <action id="Lean.InfoView.ToggleAllMessages"
+                    class="plugin.lean.infoview.LeanInfoviewAction$ToggleAllMessages"
+                    text="Toggle All Messages in Lean InfoView" description="Expand or collapse all Lean messages"/>
+            <action id="Lean.InfoView.ToggleExpectedType"
+                    class="plugin.lean.infoview.LeanInfoviewAction$ToggleExpectedType"
+                    text="Toggle Expected Type in Lean InfoView" description="Show or hide the expected type"/>
+            <action id="Lean.InfoView.CopyToComment" class="plugin.lean.infoview.LeanInfoviewAction$CopyToComment"
+                    text="Copy Lean Goal to Comment" description="Insert the displayed tactic state as a Lean comment"/>
+        </group>
+        <action id="Lean.RestartFile" class="plugin.lean.editor.LeanRestartFileAction"
+                text="Restart Lean File" description="Recheck this Lean file and rebuild changed dependencies"
+                icon="AllIcons.Actions.Refresh">
+            <add-to-group group-id="ToolsMenu" anchor="last"/>
+            <add-to-group group-id="EditorPopupMenu" anchor="last"/>
+        </action>
+        <action id="Lean.RestartServers" class="plugin.lean.editor.LeanRestartServersAction"
+                text="Restart Lean Servers" description="Restart this project’s Lean servers using saved settings"
+                icon="AllIcons.Actions.StopAndRestart">
+            <add-to-group group-id="ToolsMenu" anchor="last"/>
+        </action>
+        <action id="Lean.ModuleHierarchy" class="plugin.lean.navigation.LeanModuleHierarchyAction"
+                text="Lean Module Hierarchy" description="Browse Lean module imports and reverse imports">
+            <add-to-group group-id="GoToMenu" anchor="last"/>
+            <add-to-group group-id="EditorPopupMenu" anchor="last"/>
+            <add-to-group group-id="ProjectViewPopupMenu" anchor="last"/>
+        </action>
+        <action id="Lean.CopyModuleName" class="plugin.lean.navigation.CopyLeanModuleNameAction"
+                text="Copy Lean Module Name" description="Copy the open Lean file’s module name reported by its server">
+            <add-to-group group-id="EditorPopupMenu" anchor="last"/>
+            <add-to-group group-id="ProjectViewPopupMenu" anchor="last"/>
+        </action>
+        <action id="Lean.UnicodeSymbols" class="plugin.lean.language.LeanUnicodeSymbolsAction"
+                text="Lean Unicode Symbols…" description="Find, insert, or copy a Lean Unicode symbol">
+            <add-to-group group-id="ToolsMenu" anchor="last"/>
+        </action>
+    </actions>
+</idea-plugin>

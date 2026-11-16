@@ -1,0 +1,6 @@
+The unmodified abbreviation table and its Apache-2.0 license come from
+leanprover/vscode-lean4, lean4-unicode-input, commit
+363e8cc9c0993fc036044bb475d69e1a2ed2465a.
+https://github.com/leanprover/vscode-lean4/tree/363e8cc9c0993fc036044bb475d69e1a2ed2465a/lean4-unicode-input
+
+The catalog and IntelliJ editor integration are implemented independently.

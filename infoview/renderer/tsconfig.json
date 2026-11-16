@@ -1,0 +1,19 @@
+{
+    "compilerOptions": {
+        "target": "ES2023",
+        "lib": ["DOM", "DOM.Iterable", "ES2023"],
+        "jsx": "react-jsx",
+        "module": "ES2022",
+        "moduleResolution": "bundler",
+        "rootDir": "src",
+        "outDir": "dist",
+        "declaration": true,
+        "esModuleInterop": true,
+        "forceConsistentCasingInFileNames": true,
+        "strict": true,
+        "noFallthroughCasesInSwitch": true,
+        "skipLibCheck": true,
+        "noEmitOnError": true
+    },
+    "include": ["src/**/*"]
+}

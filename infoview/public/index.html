@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta http-equiv="Content-Security-Policy" content="
+        default-src 'none';
+        script-src 'self' blob: 'unsafe-inline' 'wasm-unsafe-eval';
+        style-src 'self' blob: 'unsafe-inline';
+        font-src 'self' data:;
+        img-src 'self' data: https:;
+        connect-src 'self' blob: https:;
+    ">
+    <title>Lean InfoView</title>
+    <link rel="icon" href="data:,">
+    <link rel="stylesheet" href="vendor/index.css">
+    <link rel="stylesheet" href="host.css">
+    <script type="importmap">
+        {"imports":{"@leanprover/infoview/loader":"./vendor/loader.production.min.js"}}
+    </script>
+    <script type="module" src="app.js"></script>
+</head>
+<body>
+    <header id="toolbar" aria-label="InfoView actions">
+        <button data-action="togglePin" title="Pin or unpin the current goal" disabled>Pin</button>
+        <button data-action="togglePaused" title="Pause or resume goal updates" disabled>Pause</button>
+        <button data-action="toggleAllMessages" title="Expand or collapse all messages" disabled>Messages</button>
+        <button data-action="toggleExpectedType" title="Show or hide the expected type" disabled>Type</button>
+        <button data-action="copyToComment" title="Copy the tactic state into a Lean comment" disabled>
+            Copy to comment
+        </button>
+    </header>
+    <div id="workspace" aria-label="Current Lean workspace"></div>
+    <p id="status" role="status">Open a Lean file to see goals and messages.</p>
+    <main id="workspaces"></main>
+</body>
+</html>

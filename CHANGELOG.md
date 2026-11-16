@@ -1,0 +1,17 @@
+# Changelog
+
+## [0.1.0]
+
+### Added
+
+- Lean 4 editor support with code completion, diagnostics, semantic highlighting, quick documentation,
+  code actions, import suggestions, rename, references, and navigation.
+- Interactive InfoView with goals, expected types, messages, traces, pinning, and project-defined widgets.
+- Unicode abbreviation input, custom translations, and a searchable symbol picker.
+- Proof-status and processing markers, interactive inlay hints, and proof-folding commands.
+- Elan discovery, toolchain inspection, installation, and project-specific selection in Lean settings.
+- Lean project creation through Lake templates.
+- Lake run configurations and project actions for builds, tests, dependency updates, and Mathlib cache downloads.
+- Dependency source browsing, module import hierarchies, and module-name copying.
+- Loogle search for Lean and Mathlib definitions and theorems.
+- Configurable indentation, syntax colors, server arguments, environment variables, and keyboard shortcuts.

@@ -1,0 +1,27 @@
+<!-- Plugin Configuration File. Read more: https://plugins.jetbrains.com/docs/intellij/plugin-configuration-file.html -->
+<idea-plugin>
+    <!-- Unique identifier of the plugin. It should be FQN. It cannot be changed between the plugin versions. -->
+    <id>plugin.lean</id>
+
+    <!-- Public plugin name should be written in Title Case.
+     Guidelines: https://plugins.jetbrains.com/docs/marketplace/best-practices-for-listing.html#plugin-name -->
+    <name>Lean 4</name>
+
+    <!-- A displayed Vendor name or Organization ID displayed on the Plugins Page. -->
+    <vendor>Lean 4 Plugin for JetBrains IDE</vendor>
+
+    <!-- Description of the plugin displayed on the Plugin Page and IDE Plugin Manager.
+         Guidelines: https://plugins.jetbrains.com/docs/marketplace/best-practices-for-listing.html#plugin-description -->
+    <description><![CDATA[
+        Lean 4 language support with an interactive InfoView, elan toolchain management,
+        and IntelliJ language-server integration.
+        Toolchains and Lean processes run on the project host, including in remote development.
+    ]]></description>
+
+    <content>
+        <module name="plugin.lean.tooling" loading="embedded"/>
+        <module name="plugin.lean.shared" loading="required"/>
+        <module name="plugin.lean.frontend"/>
+        <module name="plugin.lean.backend"/>
+    </content>
+</idea-plugin>

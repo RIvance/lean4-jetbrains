@@ -1,0 +1,28 @@
+<idea-plugin>
+    <dependencies>
+        <module name="plugin.lean.tooling"/>
+    </dependencies>
+
+    <extensions defaultExtensionNs="com.intellij">
+        <notificationGroup id="Lean" displayType="BALLOON" isLogByDefault="true"/>
+        <additionalTextAttributes scheme="Default" file="colorSchemes/LeanDefault.xml"/>
+        <additionalTextAttributes scheme="Darcula" file="colorSchemes/LeanDarcula.xml"/>
+        <applicationSettings service="plugin.lean.settings.UnicodeInputSettings"/>
+        <rdct.remoteSettingProvider implementation="plugin.lean.settings.UnicodeInputRemoteSettings"/>
+        <fileType name="Lean 4" language="Lean4" implementationClass="plugin.lean.language.LeanFileType"
+                  fieldName="INSTANCE" extensions="lean"/>
+        <lang.parserDefinition language="Lean4" implementationClass="plugin.lean.language.LeanParserDefinition"/>
+        <lang.syntaxHighlighterFactory language="Lean4"
+                                       implementationClass="plugin.lean.language.LeanSyntaxHighlighterFactory"/>
+        <lang.commenter language="Lean4" implementationClass="plugin.lean.language.LeanCommenter"/>
+        <lang.braceMatcher language="Lean4" implementationClass="plugin.lean.language.LeanBraceMatcher"/>
+        <quoteHandler fileType="Lean 4" className="plugin.lean.language.LeanQuoteHandler"/>
+        <langCodeStyleSettingsProvider implementation="plugin.lean.language.LeanCodeStyleSettingsProvider"/>
+        <lineIndentProvider implementation="plugin.lean.language.LeanLineIndentProvider"/>
+        <typedHandler implementation="plugin.lean.language.LeanUnicodeTypedHandler"/>
+        <lookup.charFilter implementation="plugin.lean.language.LeanUnicodeLookupFilter" order="first"/>
+        <editorActionHandler action="EditorTab" implementationClass="plugin.lean.language.LeanUnicodeTabHandler"/>
+        <editorActionHandler action="EditorEnter" implementationClass="plugin.lean.language.LeanUnicodeEnterHandler"/>
+        <editorActionHandler action="EditorEscape" implementationClass="plugin.lean.language.LeanUnicodeEscapeHandler"/>
+    </extensions>
+</idea-plugin>

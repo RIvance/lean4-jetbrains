@@ -1,0 +1,20 @@
+<list>
+    <option name="LEAN_SORRY_LIKE">
+        <value>
+            <option name="FOREGROUND" value="A66A00"/>
+            <option name="FONT_TYPE" value="1"/>
+        </value>
+    </option>
+    <option name="LEAN_PROCESSING">
+        <value><option name="FOREGROUND" value="A66A00"/></value>
+    </option>
+    <option name="LEAN_PROCESSING_STRIPE">
+        <value><option name="ERROR_STRIPE_COLOR" value="A66A00"/></value>
+    </option>
+    <option name="LEAN_PROCESSING_STOPPED">
+        <value><option name="FOREGROUND" value="C42B1C"/></value>
+    </option>
+    <option name="LEAN_PROCESSING_STOPPED_STRIPE">
+        <value><option name="ERROR_STRIPE_COLOR" value="C42B1C"/></value>
+    </option>
+</list>
