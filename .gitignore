@@ -52,3 +52,7 @@ infoview/dist/
 infoview/renderer/dist/
 infoview/test-results/
 infoview/playwright-report/
+
+### Optional Lean highlighting library ###
+semantic-highlighting/.lake/
+semantic-highlighting/lake-manifest.json

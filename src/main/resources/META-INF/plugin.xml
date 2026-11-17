@@ -13,12 +13,31 @@
     <!-- Description of the plugin displayed on the Plugin Page and IDE Plugin Manager.
          Guidelines: https://plugins.jetbrains.com/docs/marketplace/best-practices-for-listing.html#plugin-description -->
     <description><![CDATA[
-        Lean 4 language support with an interactive InfoView, elan toolchain management,
-        and IntelliJ language-server integration.
-        Toolchains and Lean processes run on the project host, including in remote development.
+        <p>Write Lean 4 proofs and programs in your JetBrains IDE.</p>
+        <ul>
+            <li><b>Interactive InfoView:</b> see proof goals, local hypotheses, and expected types as you move the cursor.
+                Pin proof states, inspect messages and traces, and use project widgets.</li>
+            <li><b>Semantic highlighting:</b> distinguish types, typeclasses, constructors, functions, fields,
+                local variables, and proof hypotheses with customizable colors.</li>
+            <li><b>Editing and navigation:</b> code completion, diagnostics, quick documentation, code actions,
+                inlay hints, rename, find usages, go to definition, call hierarchy, and proof folding.</li>
+            <li><b>Unicode input:</b> type Lean abbreviations such as <code>\alpha</code> for α,
+                search the symbol picker, and define your own translations.</li>
+            <li><b>Project tools:</b> manage elan toolchains, create Lake projects, build, run, and test code,
+                update dependencies, and download Mathlib caches. Remote development is supported.</li>
+            <li><b>Library discovery:</b> browse dependency sources and module imports,
+                and search for definitions and theorems with Loogle.</li>
+        </ul>
+        <p>To get started, install <a href="https://github.com/leanprover/elan">elan</a> and a Lean 4 toolchain,
+            open your Lake project folder, and open a <code>.lean</code> file.
+            Toolchain settings are under <b>Settings → Languages &amp; Frameworks → Lean</b>.</p>
+        <p>Additional semantic highlighting, proof folding, and module hierarchy depend on your Lean version.</p>
     ]]></description>
 
     <depends>com.intellij.modules.platform</depends>
+    <!-- JCEF moved from the platform into plugin content modules in 2026.2. A legacy dependency exposes
+         those modules on newer IDEs and the platform alias on 2026.1; optional keeps backend-only loading. -->
+    <depends optional="true">com.intellij.modules.jcef</depends>
 
     <content>
         <module name="plugin.lean.tooling" loading="embedded"/>

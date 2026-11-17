@@ -28,11 +28,13 @@ import org.eclipse.lsp4j.InlayHintCapabilities
 import org.eclipse.lsp4j.jsonrpc.services.JsonNotification
 import plugin.lean.editor.LeanEditorMarkup
 import plugin.lean.editor.LeanInlayService
+import plugin.lean.highlighting.LeanEnhancedHighlighting
+import plugin.lean.highlighting.HighlightingSession
 import plugin.lean.language.LeanIcons
 import plugin.lean.language.LeanLanguage
 import plugin.lean.rpc.MessageDirection
 import plugin.lean.toolchain.LeanToolchainService
-import plugin.lean.toolchain.commandLine
+import plugin.lean.toolchain.LeanToolchainHost
 import plugin.lean.tooling.LeanWorkspace
 import plugin.lean.tooling.lsp.ObservedLspProcess
 import java.io.IOException
@@ -61,6 +63,8 @@ internal class LeanLspClientDescriptor(
     var connectionId: String? = null
         private set
 
+    private var highlighting: HighlightingSession? = null
+
     override fun isSupportedFile(file: VirtualFile): Boolean {
         if (file.extension != "lean" || file.fileSystem.protocol != StandardFileSystems.FILE_PROTOCOL) return false
         val owner = project.service<LeanLspProjectService>().workspaceFor(file)
@@ -83,6 +87,10 @@ internal class LeanLspClientDescriptor(
         override fun serverInitialized(params: InitializeResult) {
             project.service<LeanServerHub>().initialized(checkNotNull(connectionId))
         }
+
+        override fun serverStopped(shutdownNormally: Boolean) {
+            highlighting?.stopped(shutdownNormally)
+        }
     }
 
     override val lspCustomization = object : LspCustomization() {
@@ -99,24 +107,32 @@ internal class LeanLspClientDescriptor(
     override fun startServerProcess(): OSProcessHandler {
         val hub = project.service<LeanServerHub>()
         val id = checkNotNull(connectionId) { "The Lean client must be created before its process starts" }
-        val command = try {
-            createCommandLine().withCharset(Charsets.UTF_8)
-        } catch (error: ExecutionException) {
+        val session = project.service<LeanEnhancedHighlighting>().session()
+        highlighting = session
+        val started = try {
+            val configuration = project.service<LeanToolchainService>().configuration
+            val toolchain = LeanToolchainHost.resolve(workspace.root(), configuration)
+            val command = toolchain.command(workspace.root(), workspace.serverArguments(configuration.serverArguments))
+            session.start(toolchain.toolchain, command, configuration.enhancedSemanticHighlighting)
+        } catch (error: IOException) {
             hub.failed(id, error.message ?: "Cannot configure the Lean server")
-            throw error
-        }
-        val process = try {
-            command.createProcess()
+            throw ExecutionException(error.message, error)
         } catch (error: ExecutionException) {
             hub.failed(id, error.message ?: "Cannot start the Lean server")
             throw error
         }
         val observed = ObservedLspProcess(
-            process,
-            { hub.message(id, MessageDirection.Server, it) },
-            { hub.message(id, MessageDirection.Client, it) }
+            started.process,
+            {
+                session.received(it)
+                hub.message(id, MessageDirection.Server, it)
+            },
+            {
+                session.sent(it)
+                hub.message(id, MessageDirection.Client, it)
+            }
         )
-        return object : OSProcessHandler(observed, command.commandLineString, Charsets.UTF_8) {
+        return object : OSProcessHandler(observed, started.command, Charsets.UTF_8) {
             override fun readerOptions(): BaseOutputReader.Options = object : BaseOutputReader.Options() {
                 override fun policy(): BaseDataReader.SleepingPolicy = forMostlySilentProcess().policy()
                 override fun splitToLines(): Boolean = false
@@ -144,11 +160,6 @@ internal class LeanLspClientDescriptor(
         return LeanLanguageClient(notifications, id, project.service<LeanEditorMarkup>())
     }
 
-    override fun createCommandLine() = try {
-        project.service<LeanToolchainService>().serverCommand(workspace).commandLine()
-    } catch (error: IOException) {
-        throw ExecutionException(error.message, error)
-    }
 }
 
 internal class LeanLanguageClient(

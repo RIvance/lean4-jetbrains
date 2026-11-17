@@ -12,6 +12,7 @@ import plugin.lean.rpc.ToolchainInspection
 import plugin.lean.tooling.ElanInstallation
 import plugin.lean.tooling.ElanNotFoundException
 import plugin.lean.tooling.ElanState
+import plugin.lean.tooling.InstalledToolchain
 import plugin.lean.tooling.ResolutionSource
 import plugin.lean.tooling.ToolCommand
 import plugin.lean.tooling.ToolchainUnavailableException
@@ -60,10 +61,16 @@ internal object LeanToolchainHost {
         arguments: List<String>,
         configuration: LeanConfiguration,
         environment: Map<String, String> = environmentFor(configuration)
-    ): ToolCommand {
+    ): ToolCommand = resolve(directory, configuration, environment).command(directory, arguments)
+
+    fun resolve(
+        directory: Path,
+        configuration: LeanConfiguration,
+        environment: Map<String, String> = environmentFor(configuration)
+    ): ResolvedLeanToolchain {
         val installation = discover(configuration, environment)
         val state = inspectState(installation, directory, configuration)
-        return installation.run(directory, state.selectedToolchain().toolchain().name(), arguments)
+        return ResolvedLeanToolchain(installation, state.selectedToolchain().toolchain())
     }
 
     suspend fun inspect(directory: Path, configuration: LeanConfiguration): ToolchainInspection =
@@ -129,4 +136,10 @@ internal object LeanToolchainHost {
 
     private const val INSPECT_TIMEOUT = 15_000
     private const val INSTALL_TIMEOUT = 15 * 60_000
+}
+
+/** All commands in a launch use the same installed selection, including linked and cached elan resolutions. */
+internal class ResolvedLeanToolchain(val installation: ElanInstallation, val toolchain: InstalledToolchain) {
+    fun command(directory: Path, arguments: List<String>): ToolCommand =
+        installation.run(directory, toolchain.name(), arguments)
 }

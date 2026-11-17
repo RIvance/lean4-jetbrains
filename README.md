@@ -3,6 +3,8 @@
 Lean 4 support for JetBrains IDEs, with interactive proof goals, native code completion and navigation,
 Unicode input, and tools for managing Lean projects.
 
+![Lean 4 with semantic highlighting, inlay hints, and InfoView in IntelliJ IDEA](docs/image/screenshot.png)
+
 ## Features
 
 - **Interactive InfoView:** inspect goals and expected types, explore messages and traces, pin proof states,
@@ -60,6 +62,18 @@ Lean and dependency sources are available under **External Libraries**.
 Semantic highlighting uses the token classifications supplied by Lean's language server. Colors for types,
 parameters, constructors, functions, fields, documentation markup, and other semantic tokens can be customized
 under **Settings → Editor → Color Scheme → Lean4**.
+
+**Richer semantic highlighting** is enabled automatically for Lean **4.24.0, 4.25.0, 4.25.1, 4.25.2,
+4.26.0, 4.28.0, 4.34.1, and 4.35.0**. It distinguishes type families, structures, typeclasses, constructors,
+fields, local binders, and proof hypotheses using Lean's elaboration information. Other releases and release
+candidates use their standard server highlighting.
+
+The first launch builds a small bundled library with the selected toolchain's Lean and Lake, then caches it
+on the project host. It does not change your Lean sources, Lake configuration, or toolchain selection.
+If building or loading fails, Lean starts with standard highlighting. If the augmented server fails later,
+the IDE restarts Lean without the library and disables that build for the rest of the project session.
+Reopen the project to retry after fixing the problem; details are available in the IDE log.
+You can turn this feature off in **Settings → Languages & Frameworks → Lean**.
 
 **Code → Optimize Imports** adds imports for unambiguous unknown identifiers using Lean's suggestions.
 Inlay hints can show implicit parameters and offer source navigation or insertion actions. Ctrl-click a hint
@@ -141,6 +155,9 @@ bullet. You can find Lean commands through **Find Action** and assign shortcuts 
   Use **Restart Lean Servers** to restart all open Lean workspaces. Both preserve unsaved editor text.
 - **InfoView stops responding:** use **Reload Lean InfoView**. Reloading resets transient pins and paused views
   while preserving editor documents and saved display preferences.
+- **InfoView's browser cannot start:** restart the IDE using its bundled runtime. On Linux, check for missing
+  native libraries using the [JetBrains JCEF troubleshooting guide](https://support.jetbrains.com/hc/en-us/articles/40480679940882-JCEF-the-missing-libs-problem-on-Linux).
+  The Toolchains, Modules, and Loogle tabs remain available when InfoView cannot start.
 - **A file outside the project has no language services:** add its directory as a project content root.
 - **Language services disconnect in remote development:** a known IntelliJ synchronization issue can affect an open
   remote file after a backend save. **Restart Lean Servers** restores InfoView and editor language services.

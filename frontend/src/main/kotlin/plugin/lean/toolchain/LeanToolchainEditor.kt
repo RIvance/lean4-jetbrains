@@ -53,6 +53,7 @@ internal class LeanToolchainEditor(
         parentScope.coroutineContext + SupervisorJob(parentScope.coroutineContext[Job]) + Dispatchers.EDT
     )
     private val enabled = JBCheckBox("Enable Lean language server")
+    private val enhancedHighlighting = JBCheckBox("Enable richer semantic highlighting on supported toolchains")
     private val executable = JBTextField().apply {
         emptyText.text = "Detect from ELAN_HOME and PATH"
         accessibleContext.accessibleName = "Elan executable"
@@ -94,6 +95,9 @@ internal class LeanToolchainEditor(
         layout = BorderLayout(0, JBUI.scale(12))
         add(panel {
             row { cell(enabled) }
+            row {
+                cell(enhancedHighlighting).comment("Automatically uses standard highlighting on other toolchains.")
+            }
             row("Elan executable:") {
                 cell(executable).align(Align.FILL).comment("Path on the project host. Blank uses automatic discovery.")
             }
@@ -152,12 +156,14 @@ internal class LeanToolchainEditor(
             toolchain = toolchain.editor.item?.toString()?.trim().orEmpty(),
             enabled = enabled.isSelected,
             serverArguments = ParametersListUtil.parse(serverArguments.text),
-            environment = variables.associate { it.name to it.value }
+            environment = variables.associate { it.name to it.value },
+            enhancedSemanticHighlighting = enhancedHighlighting.isSelected
         )
     }
 
     private fun writeForm(configuration: LeanConfiguration) {
         enabled.isSelected = configuration.enabled
+        enhancedHighlighting.isSelected = configuration.enhancedSemanticHighlighting
         executable.text = configuration.elanExecutable
         toolchain.editor.item = configuration.toolchain
         serverArguments.text = ParametersListUtil.join(configuration.serverArguments)
@@ -287,7 +293,9 @@ internal class LeanToolchainEditor(
 
     private fun updateControls() {
         val available = isLoaded && !isBusy
-        listOf(enabled, executable, toolchain, serverArguments, inspect, install).forEach { it.isEnabled = available }
+        listOf(enabled, enhancedHighlighting, executable, toolchain, serverArguments, inspect, install).forEach {
+            it.isEnabled = available
+        }
         if (available) environment.setEnabled() else environment.setDisabled()
         cancel.isEnabled = isBusy
     }
