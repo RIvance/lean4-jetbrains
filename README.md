@@ -3,6 +3,8 @@
 Lean 4 support for JetBrains IDEs, with interactive proof goals, native code completion and navigation,
 Unicode input, and tools for managing Lean projects.
 
+![Lean 4 with semantic highlighting, inlay hints, and InfoView in IntelliJ IDEA](docs/image/screenshot.png)
+
 ## Features
 
 - **Interactive InfoView:** inspect goals and expected types, explore messages and traces, pin proof states,
