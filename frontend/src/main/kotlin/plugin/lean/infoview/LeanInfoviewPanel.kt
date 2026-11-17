@@ -57,8 +57,14 @@ import javax.swing.JButton
 import javax.swing.JPanel
 import javax.swing.JTextArea
 
+/**
+ * Owns the browser and RPC page on the EDT. Browser creation registers resources with its supplied lifetime,
+ * including resources allocated before a failure; a null browser means the runtime does not support JCEF.
+ */
 internal class LeanInfoviewPanel(
-    private val project: Project, parent: CoroutineScope
+    private val project: Project,
+    parent: CoroutineScope,
+    private val createBrowser: (Disposable) -> JBCefBrowser? = ::createInfoviewBrowser
 ) : JPanel(BorderLayout()), Disposable {
     private val scope = CoroutineScope(
         parent.coroutineContext + SupervisorJob(parent.coroutineContext[Job]) + Dispatchers.EDT
@@ -71,11 +77,11 @@ internal class LeanInfoviewPanel(
         accessibleContext.accessibleName = "InfoView connection status"
     }
     private val errorPanel = JPanel(BorderLayout()).apply { isVisible = false }
-    private val browser = if (JBCefApp.isSupported()) JBCefBrowser() else null
+    private var browser: JBCefBrowser? = null
     private var page = Page()
 
     val focusComponent: JComponent get() = browser?.component ?: error
-    val canReload: Boolean get() = browser != null && scope.isActive
+    val canReload: Boolean get() = scope.isActive
     val canRequestAction: Boolean get() = scope.isActive && page.scope.isActive && page.controlsAvailable
 
     /** A reload ends the subscription and every pending request before establishing a new page identity. */
@@ -94,88 +100,135 @@ internal class LeanInfoviewPanel(
     init {
         errorPanel.add(error, BorderLayout.CENTER)
         errorPanel.add(JButton("Reload InfoView").apply {
-            isEnabled = browser != null
             addActionListener { reload() }
         }, BorderLayout.EAST)
         add(errorPanel, BorderLayout.NORTH)
-        if (browser == null) {
-            showError(
-                "InfoView requires a JetBrains Runtime with JCEF. Select the IDE's bundled runtime in Help → " +
-                "Choose Boot Java Runtime for the IDE."
-            )
-        } else {
-            Disposer.register(this, browser)
-            add(browser.component, BorderLayout.CENTER)
-            val query = JBCefJSQuery.create(browser as JBCefBrowserBase)
-            Disposer.register(this, query)
-            query.addHandler { raw ->
-                try {
-                    val envelope = Json.parseToJsonElement(raw).jsonObject
-                    val token = envelope.getValue("token").jsonPrimitive.content
-                    val message = envelope.getValue("payload").jsonObject
-                    val id = message.getValue("id").jsonPrimitive.content
-                    val command = message.getValue("command").jsonObject
-                    val operation = command.getValue("type").jsonPrimitive.content
-                    scope.launch {
-                        val owner = page
-                        if (owner.token == token && browser.cefBrowser.url == InfoviewResources.INDEX) {
-                            accept(owner, id, command, operation)
-                        }
+        try {
+            initializeBrowser()
+        } catch (failure: Throwable) {
+            scope.cancel()
+            throw failure
+        }
+    }
+
+    private fun initializeBrowser() {
+        val lifetime = Disposer.newDisposable("Lean InfoView browser")
+        var candidate: JBCefBrowser? = null
+        var initialized = false
+        try {
+            candidate = createBrowser(lifetime)
+            if (candidate == null) {
+                showError(
+                    "InfoView requires a JetBrains Runtime with JCEF. Select the IDE's bundled runtime in Help → " +
+                    "Choose Boot Java Runtime for the IDE."
+                )
+                return
+            }
+            configureBrowser(candidate, lifetime)
+            add(candidate.component, BorderLayout.CENTER)
+            browser = candidate
+            candidate.loadURL(InfoviewResources.INDEX)
+            Disposer.register(this, lifetime)
+            initialized = true
+        } catch (exception: CancellationException) {
+            throw exception
+        } catch (exception: ProcessCanceledException) {
+            throw exception
+        } catch (exception: IllegalStateException) {
+            browserFailed(exception)
+        } catch (exception: UnsatisfiedLinkError) {
+            browserFailed(exception)
+        } finally {
+            if (!initialized) {
+                browser = null
+                page.scope.cancel()
+                candidate?.component?.let { remove(it) }
+                Disposer.dispose(lifetime)
+            }
+            revalidate()
+            repaint()
+        }
+    }
+
+    private fun browserFailed(cause: Throwable) {
+        logger<LeanInfoviewPanel>().warn("Could not start the InfoView browser", cause)
+        showError(
+            "InfoView's embedded browser could not start. Try Reload InfoView. If it still fails, restart the IDE " +
+            "and check its JCEF runtime in the IDE log. On Linux, missing native libraries can prevent browser startup."
+        )
+    }
+
+    private fun configureBrowser(browser: JBCefBrowser, lifetime: Disposable) {
+        val browserScope = CoroutineScope(scope.coroutineContext + SupervisorJob(scope.coroutineContext[Job]))
+        Disposer.register(lifetime, Disposable { browserScope.cancel() })
+        val query = JBCefJSQuery.create(browser as JBCefBrowserBase)
+        Disposer.register(lifetime, query)
+        query.addHandler { raw ->
+            try {
+                val envelope = Json.parseToJsonElement(raw).jsonObject
+                val token = envelope.getValue("token").jsonPrimitive.content
+                val message = envelope.getValue("payload").jsonObject
+                val id = message.getValue("id").jsonPrimitive.content
+                val command = message.getValue("command").jsonObject
+                val operation = command.getValue("type").jsonPrimitive.content
+                browserScope.launch {
+                    val owner = page
+                    if (owner.token == token && browser.cefBrowser.url == InfoviewResources.INDEX) {
+                        accept(owner, id, command, operation)
                     }
-                    JBCefJSQuery.Response("")
-                } catch (exception: IllegalArgumentException) {
-                    JBCefJSQuery.Response(null, -32600, "Invalid InfoView bridge message")
-                } catch (exception: NoSuchElementException) {
-                    JBCefJSQuery.Response(null, -32600, "Incomplete InfoView bridge message")
+                }
+                JBCefJSQuery.Response("")
+            } catch (exception: IllegalArgumentException) {
+                JBCefJSQuery.Response(null, -32600, "Invalid InfoView bridge message")
+            } catch (exception: NoSuchElementException) {
+                JBCefJSQuery.Response(null, -32600, "Incomplete InfoView bridge message")
+            }
+        }
+        browser.jbCefClient.addRequestHandler(InfoviewResources(lifetime), browser.cefBrowser)
+        browser.jbCefClient.addLoadHandler(object : CefLoadHandlerAdapter() {
+            override fun onLoadStart(
+                browser: CefBrowser, frame: CefFrame, transitionType: CefRequest.TransitionType
+            ) {
+                if (frame.isMain) browserScope.launch {
+                    page.scope.cancel()
+                    page = Page()
                 }
             }
-            browser.jbCefClient.addRequestHandler(InfoviewResources(this), browser.cefBrowser)
-            browser.jbCefClient.addLoadHandler(object : CefLoadHandlerAdapter() {
-                override fun onLoadStart(
-                    browser: CefBrowser, frame: CefFrame, transitionType: CefRequest.TransitionType
-                ) {
-                    if (frame.isMain) scope.launch {
-                        page.scope.cancel()
-                        page = Page()
-                    }
-                }
 
-                override fun onLoadEnd(browser: CefBrowser, frame: CefFrame, httpStatusCode: Int) {
-                    if (frame.isMain && frame.url == InfoviewResources.INDEX) scope.launch {
-                        val failure = "function(code, message) { window.leanReceive({ reply: " +
-                            "{ id: payload.id, type: 'error', code, message } }); }"
-                        val request = "JSON.stringify({ token: ${JsonPrimitive(page.token)}, payload })"
-                        val injection = query.inject(request, "function() {}", failure)
-                        // A remote CefFrame is valid only during its callback; the browser owns the lasting handle.
-                        browser.executeJavaScript(
-                            "window.leanPageToken = ${JsonPrimitive(page.token)};" +
-                            "window.leanHost = raw => { const payload = JSON.parse(raw); $injection };" +
-                            "window.dispatchEvent(new Event('lean-host-ready'));",
-                            InfoviewResources.INDEX, 0
-                        )
-                        errorPanel.isVisible = false
-                        send(buildJsonObject { put("theme", infoviewTheme()) })
-                    }
+            override fun onLoadEnd(browser: CefBrowser, frame: CefFrame, httpStatusCode: Int) {
+                if (frame.isMain && frame.url == InfoviewResources.INDEX) browserScope.launch {
+                    val failure = "function(code, message) { window.leanReceive({ reply: " +
+                        "{ id: payload.id, type: 'error', code, message } }); }"
+                    val request = "JSON.stringify({ token: ${JsonPrimitive(page.token)}, payload })"
+                    val injection = query.inject(request, "function() {}", failure)
+                    // A remote CefFrame is valid only during its callback; the browser owns the lasting handle.
+                    browser.executeJavaScript(
+                        "window.leanPageToken = ${JsonPrimitive(page.token)};" +
+                        "window.leanHost = raw => { const payload = JSON.parse(raw); $injection };" +
+                        "window.dispatchEvent(new Event('lean-host-ready'));",
+                        InfoviewResources.INDEX, 0
+                    )
+                    errorPanel.isVisible = false
+                    send(buildJsonObject { put("theme", infoviewTheme()) })
                 }
+            }
 
-                override fun onLoadError(
-                    browser: CefBrowser, frame: CefFrame, code: CefLoadHandler.ErrorCode, text: String, url: String
-                ) {
-                    if (frame.isMain && code != CefLoadHandler.ErrorCode.ERR_ABORTED) scope.launch {
-                        disconnect(page, "InfoView could not load: $text")
-                    }
+            override fun onLoadError(
+                browser: CefBrowser, frame: CefFrame, code: CefLoadHandler.ErrorCode, text: String, url: String
+            ) {
+                if (frame.isMain && code != CefLoadHandler.ErrorCode.ERR_ABORTED) browserScope.launch {
+                    disconnect(page, "InfoView could not load: $text")
                 }
-            }, browser.cefBrowser)
-            ApplicationManager.getApplication().messageBus.connect(this).subscribe(
-                LafManagerListener.TOPIC,
-                LafManagerListener { scope.launch { send(buildJsonObject { put("theme", infoviewTheme()) }) } }
-            )
-            ApplicationManager.getApplication().messageBus.connect(this).subscribe(
-                EditorColorsManager.TOPIC,
-                EditorColorsListener { scope.launch { send(buildJsonObject { put("theme", infoviewTheme()) }) } }
-            )
-            browser.loadURL(InfoviewResources.INDEX)
-        }
+            }
+        }, browser.cefBrowser)
+        ApplicationManager.getApplication().messageBus.connect(lifetime).subscribe(
+            LafManagerListener.TOPIC,
+            LafManagerListener { browserScope.launch { send(buildJsonObject { put("theme", infoviewTheme()) }) } }
+        )
+        ApplicationManager.getApplication().messageBus.connect(lifetime).subscribe(
+            EditorColorsManager.TOPIC,
+            EditorColorsListener { browserScope.launch { send(buildJsonObject { put("theme", infoviewTheme()) }) } }
+        )
     }
 
     private fun accept(owner: Page, id: String, command: JsonObject, operation: String) {
@@ -282,7 +335,13 @@ internal class LeanInfoviewPanel(
         page.controlsAvailable = false
         page.scope.cancel()
         errorPanel.isVisible = false
-        browser?.cefBrowser?.reload()
+        val activeBrowser = browser
+        if (activeBrowser == null) {
+            page = Page()
+            initializeBrowser()
+        } else {
+            activeBrowser.cefBrowser.reload()
+        }
     }
 
     /** Losing the event stream ends this page's requests and RPC leases, even if the browser remains visible. */
@@ -301,4 +360,11 @@ internal class LeanInfoviewPanel(
     }
 
     override fun dispose() = scope.cancel()
+}
+
+private fun createInfoviewBrowser(lifetime: Disposable): JBCefBrowser? {
+    if (!JBCefApp.isSupported()) return null
+    val client = JBCefApp.getInstance().createClient()
+    Disposer.register(lifetime, client)
+    return JBCefBrowser.createBuilder().setClient(client).build()
 }

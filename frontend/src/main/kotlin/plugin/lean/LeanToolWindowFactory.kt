@@ -23,7 +23,7 @@ internal class LeanToolWindowFactory : ToolWindowFactory, DumbAware {
     override fun createToolWindowContent(project: Project, toolWindow: ToolWindow) {
         val infoview = LeanInfoviewPanel(project, project.service<LeanFrontendScope>().scope)
         val infoviewContent = ContentFactory.getInstance().createContent(infoview, "InfoView", false)
-        infoviewContent.preferredFocusableComponent = infoview.focusComponent
+        infoviewContent.setPreferredFocusedComponent { infoview.focusComponent }
         infoviewContent.setDisposer(infoview)
         toolWindow.contentManager.addContent(infoviewContent)
         val panel = LeanToolchainPanel(project, project.service<LeanFrontendScope>().scope)

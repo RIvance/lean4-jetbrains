@@ -141,6 +141,9 @@ bullet. You can find Lean commands through **Find Action** and assign shortcuts 
   Use **Restart Lean Servers** to restart all open Lean workspaces. Both preserve unsaved editor text.
 - **InfoView stops responding:** use **Reload Lean InfoView**. Reloading resets transient pins and paused views
   while preserving editor documents and saved display preferences.
+- **InfoView's browser cannot start:** restart the IDE using its bundled runtime. On Linux, check for missing
+  native libraries using the [JetBrains JCEF troubleshooting guide](https://support.jetbrains.com/hc/en-us/articles/40480679940882-JCEF-the-missing-libs-problem-on-Linux).
+  The Toolchains, Modules, and Loogle tabs remain available when InfoView cannot start.
 - **A file outside the project has no language services:** add its directory as a project content root.
 - **Language services disconnect in remote development:** a known IntelliJ synchronization issue can affect an open
   remote file after a backend save. **Restart Lean Servers** restores InfoView and editor language services.
