@@ -38,7 +38,7 @@ internal fun ToolCommand.execute(timeoutMillis: Int, onOutput: (String) -> Unit 
     val handler = try {
         OSProcessHandler(commandLine())
     } catch (error: ExecutionException) {
-        throw ToolProcessException(this, null, "Could not start elan: ${error.message}", error)
+        throw ToolProcessException(this, null, "Could not start ${executable().fileName}: ${error.message}", error)
     }
     val output = ProcessOutput()
     val completed = CompletableFuture<ProcessOutput>()
@@ -67,10 +67,12 @@ internal fun ToolCommand.execute(timeoutMillis: Int, onOutput: (String) -> Unit 
         }
         ProgressManager.checkCanceled()
         if (Thread.currentThread().isInterrupted) throw ProcessCanceledException()
-        if (!completed.isDone) throw ToolProcessException(this, null, "elan did not finish within the time limit.")
+        if (!completed.isDone) {
+            throw ToolProcessException(this, null, "${executable().fileName} did not finish within the time limit.")
+        }
         if (output.exitCode != 0) {
             val detail = output.stderr.trim().ifEmpty { output.stdout.trim() }
-            throw ToolProcessException(this, output.exitCode, "elan failed (${output.exitCode}): $detail")
+            throw ToolProcessException(this, output.exitCode, "${executable().fileName} failed (${output.exitCode}): $detail")
         }
         return output.stdout
     } finally {

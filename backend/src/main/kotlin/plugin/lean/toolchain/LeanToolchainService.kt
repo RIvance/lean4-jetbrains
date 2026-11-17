@@ -12,7 +12,6 @@ import plugin.lean.rpc.LeanConfiguration
 import plugin.lean.rpc.LeanConfigurationUpdate
 import plugin.lean.rpc.ToolchainInspection
 import plugin.lean.settings.LeanSettings
-import plugin.lean.tooling.LeanWorkspace
 import plugin.lean.tooling.ToolCommand
 import java.io.IOException
 import java.nio.file.Path
@@ -20,11 +19,6 @@ import java.nio.file.Path
 @Service(Service.Level.PROJECT)
 class LeanToolchainService(private val project: Project) {
     val configuration: LeanConfiguration get() = project.service<LeanSettings>().configuration
-
-    fun serverCommand(workspace: LeanWorkspace): ToolCommand {
-        val snapshot = configuration
-        return command(workspace.root(), workspace.serverArguments(snapshot.serverArguments), snapshot)
-    }
 
     /** Blocking resolution boundary, shared by language servers and user-launched tool commands. */
     fun command(

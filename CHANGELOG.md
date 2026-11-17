@@ -6,6 +6,7 @@
 
 - Lean 4 editor support with code completion, diagnostics, semantic highlighting, quick documentation,
   code actions, import suggestions, rename, references, and navigation.
+- Automatic richer semantic highlighting on supported Lean releases, with fallback to standard highlighting.
 - Interactive InfoView with goals, expected types, messages, traces, pinning, and project-defined widgets.
 - Unicode abbreviation input, custom translations, and a searchable symbol picker.
 - Proof-status and processing markers, interactive inlay hints, and proof-folding commands.

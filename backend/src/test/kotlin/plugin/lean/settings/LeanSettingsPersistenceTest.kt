@@ -14,6 +14,7 @@ class LeanSettingsPersistenceTest : BasePlatformTestCase() {
             elanExecutable = "/tools/\$USER_HOME\$/elan",
             toolchain = "linked-\$USER_HOME\$",
             enabled = false,
+            enhancedSemanticHighlighting = false,
             serverArguments = listOf("", "\$USER_HOME\$", "  spaces  ", "line one\r\nline two\t", "∀ 𝒜", "\uD800"),
             environment = mapOf("\$USER_HOME\$" to "literal \$USER_HOME\$", "LEAN_SAMPLE" to "\${value}")
         )

@@ -61,6 +61,18 @@ Semantic highlighting uses the token classifications supplied by Lean's language
 parameters, constructors, functions, fields, documentation markup, and other semantic tokens can be customized
 under **Settings → Editor → Color Scheme → Lean4**.
 
+**Richer semantic highlighting** is enabled automatically for Lean **4.24.0, 4.25.0, 4.25.1, 4.25.2,
+4.26.0, 4.28.0, 4.34.1, and 4.35.0**. It distinguishes type families, structures, typeclasses, constructors,
+fields, local binders, and proof hypotheses using Lean's elaboration information. Other releases and release
+candidates use their standard server highlighting.
+
+The first launch builds a small bundled library with the selected toolchain's Lean and Lake, then caches it
+on the project host. It does not change your Lean sources, Lake configuration, or toolchain selection.
+If building or loading fails, Lean starts with standard highlighting. If the augmented server fails later,
+the IDE restarts Lean without the library and disables that build for the rest of the project session.
+Reopen the project to retry after fixing the problem; details are available in the IDE log.
+You can turn this feature off in **Settings → Languages & Frameworks → Lean**.
+
 **Code → Optimize Imports** adds imports for unambiguous unknown identifiers using Lean's suggestions.
 Inlay hints can show implicit parameters and offer source navigation or insertion actions. Ctrl-click a hint
 (Cmd-click on macOS) to activate its action, or use **Insert Lean Hint** from its context menu when available.

@@ -13,7 +13,8 @@ data class LeanConfiguration(
     val toolchain: String = "",
     val enabled: Boolean = true,
     val serverArguments: List<String> = emptyList(),
-    val environment: Map<String, String> = emptyMap()
+    val environment: Map<String, String> = emptyMap(),
+    val enhancedSemanticHighlighting: Boolean = true
 ) {
     /** Retained configurations must not share mutable collections with an editor or saved state. */
     fun snapshot(): LeanConfiguration = copy(
