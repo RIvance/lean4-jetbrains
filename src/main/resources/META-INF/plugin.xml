@@ -19,6 +19,9 @@
     ]]></description>
 
     <depends>com.intellij.modules.platform</depends>
+    <!-- JCEF moved from the platform into plugin content modules in 2026.2. A legacy dependency exposes
+         those modules on newer IDEs and the platform alias on 2026.1; optional keeps backend-only loading. -->
+    <depends optional="true">com.intellij.modules.jcef</depends>
 
     <content>
         <module name="plugin.lean.tooling" loading="embedded"/>

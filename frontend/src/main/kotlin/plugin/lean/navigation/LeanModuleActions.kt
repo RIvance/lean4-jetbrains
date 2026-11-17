@@ -17,7 +17,6 @@ import com.intellij.openapi.project.DumbAwareAction
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.util.text.StringUtil
 import com.intellij.openapi.vfs.VirtualFile
-import com.intellij.openapi.wm.ToolWindowManager
 import com.intellij.platform.ide.progress.withBackgroundProgress
 import com.intellij.platform.project.projectId
 import kotlinx.coroutines.CancellationException
@@ -26,6 +25,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.launch
+import plugin.lean.LeanToolWindowFactory
 import plugin.lean.rpc.LeanModuleHierarchyApi
 import plugin.lean.rpc.LeanRpcResult
 import java.awt.datatransfer.StringSelection
@@ -57,15 +57,7 @@ internal sealed class LeanModuleFileAction : DumbAwareAction() {
 }
 
 internal class LeanModuleHierarchyAction : LeanModuleFileAction() {
-    override fun perform(project: Project, file: VirtualFile) {
-        val window = ToolWindowManager.getInstance(project).getToolWindow("Lean") ?: return
-        window.activate {
-            val content = window.contentManager.contents.firstOrNull { it.component is LeanModuleHierarchyPanel }
-                ?: return@activate
-            window.contentManager.setSelectedContent(content)
-            (content.component as LeanModuleHierarchyPanel).showFile(file)
-        }
-    }
+    override fun perform(project: Project, file: VirtualFile) = LeanToolWindowFactory.showModuleHierarchy(project, file)
 }
 
 internal class CopyLeanModuleNameAction : LeanModuleFileAction() {

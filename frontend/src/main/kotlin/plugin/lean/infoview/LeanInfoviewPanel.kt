@@ -366,5 +366,5 @@ private fun createInfoviewBrowser(lifetime: Disposable): JBCefBrowser? {
     if (!JBCefApp.isSupported()) return null
     val client = JBCefApp.getInstance().createClient()
     Disposer.register(lifetime, client)
-    return JBCefBrowser.createBuilder().setClient(client).build()
+    return JBCefBrowser.createBuilder().setClient(client).build().also { Disposer.register(lifetime, it) }
 }
