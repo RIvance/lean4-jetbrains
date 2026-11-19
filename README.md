@@ -38,7 +38,8 @@ and import optimization require support from its language server.
 4. Open **Settings → Languages & Frameworks → Lean** and use **Inspect** to check the active toolchain.
 5. Open a `.lean` file to start language services. InfoView opens automatically for the first selected Lean file.
 
-To create a project, choose **New Project → Lean 4**, select an installed toolchain, and choose a Lake template.
+To create a project, choose **New Project → Lean 4**, keep **Automatic** or select an installed toolchain,
+and choose a Lake template.
 **Template Help** lists the options provided by that toolchain, including the supported configuration formats.
 
 ## Working with Lean
@@ -95,10 +96,11 @@ adjust automatic conversion, and add custom translations, including multiline te
 ### Toolchains and server settings
 
 Manage toolchains in **Lean → Toolchains** or **Settings → Languages & Frameworks → Lean**.
-**Inspect** shows installed toolchains and the active selection; **Install Toolchain** downloads a requested toolchain.
+Installed toolchains load when the panel opens. **Inspect** refreshes the list and shows the active selection.
+**Install Toolchain** downloads a requested toolchain.
 Select a toolchain and apply the settings to use it in the IDE project.
 
-Toolchain selections apply to this IDE project only. Leave the selection empty to follow elan's normal rules,
+Toolchain selections apply to this IDE project only. Choose **Automatic** to follow elan's normal rules,
 including the project's `lean-toolchain` file. Elan is discovered through `ELAN_HOME`, `PATH`, or its default home;
 you can also select its executable explicitly in settings. Linked toolchains are supported.
 

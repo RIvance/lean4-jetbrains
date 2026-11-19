@@ -10,10 +10,8 @@ import com.intellij.ide.wizard.NewProjectWizardBaseStep
 import com.intellij.ide.wizard.NewProjectWizardChainStep.Companion.nextStep
 import com.intellij.ide.wizard.NewProjectWizardStep
 import com.intellij.ide.wizard.RootNewProjectWizardStep
-import com.intellij.openapi.application.EDT
 import com.intellij.openapi.application.invokeAndWaitIfNeeded
 import com.intellij.openapi.application.runWriteAction
-import com.intellij.openapi.components.Service
 import com.intellij.openapi.components.service
 import com.intellij.openapi.diagnostic.logger
 import com.intellij.openapi.module.GeneralModuleType
@@ -27,18 +25,17 @@ import com.intellij.openapi.vfs.LocalFileSystem
 import com.intellij.openapi.vfs.VfsUtilCore
 import com.intellij.platform.ide.progress.ModalTaskOwner
 import com.intellij.platform.ide.progress.runWithModalProgressBlocking
+import com.intellij.ui.DocumentAdapter
 import com.intellij.ui.components.JBScrollPane
 import com.intellij.ui.components.JBTextArea
 import com.intellij.ui.components.JBTextField
 import com.intellij.ui.dsl.builder.Align
 import com.intellij.ui.dsl.builder.Panel
+import com.intellij.util.ui.initOnShow
 import kotlinx.coroutines.CancellationException
-import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
-import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.cancel
-import kotlinx.coroutines.launch
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.runInterruptible
 import kotlinx.coroutines.withContext
 import plugin.lean.language.LeanIcons
@@ -46,13 +43,14 @@ import plugin.lean.rpc.ActiveToolchainInfo
 import plugin.lean.rpc.LeanConfiguration
 import plugin.lean.rpc.ToolchainInspection
 import plugin.lean.settings.LeanSettings
+import plugin.lean.toolchain.LeanToolchainComboBox
 import plugin.lean.toolchain.LeanToolchainHost
 import plugin.lean.toolchain.execute
 import java.io.IOException
 import java.nio.file.InvalidPathException
 import java.nio.file.Path
-import javax.swing.DefaultComboBoxModel
 import javax.swing.JButton
+import javax.swing.event.DocumentEvent
 
 /** The platform's project generator owns this UI and project-model creation on the project host. */
 class LeanProjectModuleBuilder : GeneratorNewProjectWizardBuilderAdapter(LeanProjectWizard()) {
@@ -69,19 +67,9 @@ class LeanProjectWizard : GeneratorNewProjectWizard {
         RootNewProjectWizardStep(context).nextStep(::NewProjectWizardBaseStep).nextStep(::LeanProjectStep)
 }
 
-@Service(Service.Level.APP)
-internal class LeanProjectWizardScope(val scope: CoroutineScope)
-
 private class LeanProjectStep(private val base: NewProjectWizardBaseStep) : AbstractNewProjectWizardStep(base) {
-    private val parentScope = service<LeanProjectWizardScope>().scope
-    private val scope = CoroutineScope(
-        parentScope.coroutineContext + SupervisorJob(parentScope.coroutineContext[Job]) + Dispatchers.EDT
-    )
     private val executable = JBTextField().apply { emptyText.text = "Detect from ELAN_HOME and PATH" }
-    private val toolchain = ComboBox<String>().apply {
-        isEditable = true
-        model = DefaultComboBoxModel(arrayOf(""))
-    }
+    private val toolchain = LeanToolchainComboBox()
     // Suggestions remain editable: the selected Lake version owns the supported template identifiers.
     private val template = ComboBox(arrayOf("std", "exe", "lib", "math", "math-lax")).apply { isEditable = true }
     private val inspect = JButton("Inspect Toolchains")
@@ -94,35 +82,53 @@ private class LeanProjectStep(private val base: NewProjectWizardBaseStep) : Abst
         accessibleContext.accessibleName = "Lean project setup details"
     }
     private var prepared: PreparedLeanProject? = null
+    private var inspection: Job? = null
+    private var templateHelp: Job? = null
 
     init {
-        Disposer.register(context.disposable) { scope.cancel() }
-        inspect.addActionListener {
-            inspectSelection({ directory, configuration ->
-                LeanToolchainHost.inspect(directory, configuration)
-            }) { result, configuration ->
-                details.text = when (result) {
-                    is ToolchainInspection.Failed -> result.message
-                    is ToolchainInspection.Available -> {
-                        toolchain.model = DefaultComboBoxModel(
-                            (listOf("") + result.installed.map { it.name }).toTypedArray()
-                        )
-                        toolchain.editor.item = configuration.toolchain
-                        val active = when (val selection = result.active) {
-                            is ActiveToolchainInfo.Available -> selection.toolchain.name
-                            is ActiveToolchainInfo.Unavailable -> selection.message
-                        }
-                        "Elan ${result.elanVersion}\n${result.executable}\n\nSelected toolchain: $active"
+        Disposer.register(context.disposable) {
+            inspection?.cancel()
+            templateHelp?.cancel()
+        }
+        inspect.addActionListener { inspectToolchains() }
+        toolchain.addActionListener { inspectToolchains(debounce = true) }
+        help.addActionListener {
+            templateHelp?.cancel()
+            templateHelp = readSelection(
+                "Reading Lake template help…", waitFor = inspection, action = { directory, configuration ->
+                    runInterruptible(Dispatchers.IO) {
+                        LeanToolchainHost.command(directory, listOf("lake", "help", "init"), configuration)
+                            .execute(15_000)
                     }
                 }
-            }
+            ) { text, _ -> details.text = text.trim() }
         }
-        help.addActionListener {
-            inspectSelection({ directory, configuration ->
-                runInterruptible(Dispatchers.IO) {
-                    LeanToolchainHost.command(directory, listOf("lake", "help", "init"), configuration).execute(15_000)
+        base.pathProperty.afterChange(context.disposable) { inspectToolchains(debounce = true) }
+        base.nameProperty.afterChange(context.disposable) { inspectToolchains(debounce = true) }
+        executable.document.addDocumentListener(object : DocumentAdapter() {
+            override fun textChanged(event: DocumentEvent) = inspectToolchains(debounce = true)
+        })
+        inspectToolchains()
+    }
+
+    private fun inspectToolchains(debounce: Boolean = false) {
+        templateHelp?.cancel()
+        inspection?.cancel()
+        inspection = readSelection(
+            "Inspecting installed Lean toolchains…", debounce = debounce, action = LeanToolchainHost::inspect
+        ) { result, config ->
+            toolchain.showInspection(result, config.toolchain)
+            details.text = when (result) {
+                is ToolchainInspection.Failed -> result.message
+                is ToolchainInspection.Available -> {
+                    val active = when (val selection = result.active) {
+                        is ActiveToolchainInfo.Available -> selection.toolchain.name
+                        is ActiveToolchainInfo.Unavailable -> selection.message
+                    }
+                    "Elan ${result.elanVersion} · ${result.installed.size} installed toolchains\n" +
+                        "${result.executable}\n\nToolchain for ${result.directory}\n$active"
                 }
-            }) { text, _ -> details.text = text.trim() }
+            }
         }
     }
 
@@ -133,7 +139,7 @@ private class LeanProjectStep(private val base: NewProjectWizardBaseStep) : Abst
             }
             row("Lean toolchain:") {
                 cell(toolchain).align(Align.FILL)
-                    .comment("Choose an installed toolchain, or leave blank to use elan’s selection at this location.")
+                    .comment("Automatic follows elan’s selection at the project location.")
                     .validationOnApply {
                         try {
                             val directory = destination()
@@ -205,51 +211,44 @@ private class LeanProjectStep(private val base: NewProjectWizardBaseStep) : Abst
     }
 
     private fun configuration() = LeanConfiguration(
-        elanExecutable = executable.text.trim(), toolchain = toolchain.editor.item?.toString()?.trim().orEmpty()
+        elanExecutable = executable.text.trim(), toolchain = toolchain.toolchainName
     )
 
     private fun templateName(): String = template.editor.item?.toString()?.trim().orEmpty()
     private fun destination(): Path = Path.of(base.path).resolve(base.name).toAbsolutePath().normalize()
 
-    private fun <T> inspectSelection(
+    private fun <T> readSelection(
+        message: String,
+        debounce: Boolean = false,
+        waitFor: Job? = null,
         action: suspend (Path, LeanConfiguration) -> T,
         show: (T, LeanConfiguration) -> Unit
-    ) {
-        if (!inspect.isEnabled) return
+    ): Job = toolchain.initOnShow(message) {
+        waitFor?.join()
+        if (debounce) delay(200)
         val configuration = configuration()
-        val target = try {
-            destination()
-        } catch (error: InvalidPathException) {
-            details.text = error.message
-            return
-        }
-        scope.launch {
-            setBusy(true)
-            details.text = "Reading the selected Lean environment…"
-            try {
-                val directory = runInterruptible(Dispatchers.IO) { LeanProjectInitializer.selectionDirectory(target) }
-                val result = action(directory, configuration)
-                if (destination() == target && configuration() == configuration) {
-                    show(result, configuration)
-                } else {
-                    details.text = "The project location changed. Inspect the new location to refresh these details."
-                }
-            } catch (error: CancellationException) {
-                throw error
-            } catch (error: ProcessCanceledException) {
-                throw error
-            } catch (error: IOException) {
-                details.text = error.message
-            } catch (error: Exception) {
-                logger<LeanProjectWizard>().warn("Could not inspect the new project's Lean environment", error)
-                details.text = "Could not inspect Lean. See the IDE log for details."
-            } finally {
-                setBusy(false)
+        details.text = message
+        try {
+            val target = destination()
+            val directory = runInterruptible(Dispatchers.IO) { LeanProjectInitializer.selectionDirectory(target) }
+            val result = action(directory, configuration)
+            if (configuration() == configuration) {
+                show(result, configuration)
+            } else {
+                inspectToolchains(debounce = true)
             }
+        } catch (error: CancellationException) {
+            throw error
+        } catch (error: ProcessCanceledException) {
+            throw error
+        } catch (error: IOException) {
+            details.text = error.message
+        } catch (error: InvalidPathException) {
+            details.text = "Invalid project or executable path: ${error.input}"
+        } catch (error: Exception) {
+            logger<LeanProjectWizard>().warn("Could not inspect the new project's Lean environment", error)
+            details.text = "Could not inspect Lean. See the IDE log for details."
         }
-    }
-
-    private fun setBusy(busy: Boolean) {
-        listOf(executable, toolchain, template, inspect, help).forEach { it.isEnabled = !busy }
+        details.caretPosition = 0
     }
 }

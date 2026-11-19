@@ -1,15 +1,18 @@
 package plugin.lean
 
+import com.intellij.openapi.application.impl.LaterInvocator
 import com.intellij.openapi.components.service
 import com.intellij.openapi.options.Configurable
 import com.intellij.openapi.options.ConfigurationException
 import com.intellij.testFramework.PlatformTestUtil
 import com.intellij.testFramework.fixtures.BasePlatformTestCase
+import com.intellij.ui.ComponentUtil
 import com.intellij.ui.RawCommandLineEditor
 import com.intellij.ui.components.JBCheckBox
 import com.intellij.ui.components.JBTextField
 import com.intellij.ui.components.JBTextArea
 import com.intellij.util.ui.UIUtil
+import com.intellij.util.ui.forceRespectIsShowingClientProperty
 import plugin.lean.rpc.LeanConfiguration
 import plugin.lean.settings.LeanProjectConfigurable
 import plugin.lean.settings.LeanSettings
@@ -178,22 +181,28 @@ class LeanProjectSettingsTest : BasePlatformTestCase() {
         }
     }
 
-    fun testHostOperationFailuresRestoreControlsAndPreserveTheDraft() {
+    fun testHostOperationFailuresRestoreControlsAndPreserveTheDraftWhileSettingsIsModal() {
         withEditor { configurable, component, executable ->
             val saved = settings.configuration
+            val details = UIUtil.findComponentsOfType(component, JBTextArea::class.java).single()
+            assertTrue(details.text, details.text.contains(saved.elanExecutable))
             val missing = Path.of(myFixture.tempDirFixture.tempDirPath, "missing-elan").toString()
             executable.text = missing
             UIUtil.findComponentsOfType(component, JComboBox::class.java).single().editor.item = "local-build"
-            val details = UIUtil.findComponentsOfType(component, JBTextArea::class.java).single()
             val buttons = UIUtil.findComponentsOfType(component, JButton::class.java)
-            for (label in listOf("Inspect", "Install Toolchain")) {
-                val button = buttons.single { it.text == label }
-                button.doClick()
-                PlatformTestUtil.waitWithEventsDispatching("$label did not finish", { button.isEnabled }, 10)
-                assertTrue(details.text, details.text.contains(missing))
-                assertEquals(saved, settings.configuration)
-                assertEquals(missing, executable.text)
-                assertTrue(configurable.isModified)
+            LaterInvocator.enterModal(component)
+            try {
+                for (label in listOf("Inspect", "Install Toolchain")) {
+                    val button = buttons.single { it.text == label }
+                    button.doClick()
+                    PlatformTestUtil.waitWithEventsDispatching("$label did not finish", { button.isEnabled }, 10)
+                    assertTrue(details.text, details.text.contains(missing))
+                    assertEquals(saved, settings.configuration)
+                    assertEquals(missing, executable.text)
+                    assertTrue(configurable.isModified)
+                }
+            } finally {
+                LaterInvocator.leaveModal(component)
             }
         }
     }
@@ -202,11 +211,13 @@ class LeanProjectSettingsTest : BasePlatformTestCase() {
         val configurable = configurable()
         try {
             val component = configurable.createComponent()
-            val executable = executableField(component)
-            repeat(3) { configurable.reset() }
-            waitForLoad(executable)
-            assertEquals("/saved/elan", executable.text)
-            configurable.reset()
+            withShowingComponent(component) {
+                val executable = executableField(component)
+                repeat(3) { configurable.reset() }
+                waitForLoad(executable)
+                assertEquals("/saved/elan", executable.text)
+                configurable.reset()
+            }
         } finally {
             configurable.disposeUIResources()
         }
@@ -220,8 +231,10 @@ class LeanProjectSettingsTest : BasePlatformTestCase() {
             val component = configurable.createComponent()
             val executable = executableField(component)
             configurable.reset()
-            waitForLoad(executable)
-            action(configurable, component, executable)
+            withShowingComponent(component) {
+                waitForLoad(executable)
+                action(configurable, component, executable)
+            }
         } finally {
             configurable.disposeUIResources()
         }
@@ -247,5 +260,17 @@ class LeanProjectSettingsTest : BasePlatformTestCase() {
         }
         assertEquals("language", registration.parentId)
         return registration.createConfigurable() as LeanProjectConfigurable
+    }
+}
+
+internal fun withShowingComponent(component: JComponent, action: () -> Unit) {
+    val previous = forceRespectIsShowingClientProperty
+    forceRespectIsShowingClientProperty = true
+    ComponentUtil.forceMarkAsShowing(component, true)
+    try {
+        action()
+    } finally {
+        ComponentUtil.forceMarkAsShowing(component, false)
+        forceRespectIsShowingClientProperty = previous
     }
 }

@@ -4,10 +4,11 @@ import com.intellij.execution.util.EnvVariablesTable
 import com.intellij.execution.util.EnvironmentVariable
 import com.intellij.openapi.Disposable
 import com.intellij.openapi.application.EDT
+import com.intellij.openapi.application.ModalityState
+import com.intellij.openapi.application.asContextElement
 import com.intellij.openapi.diagnostic.logger
 import com.intellij.openapi.progress.ProcessCanceledException
 import com.intellij.openapi.project.Project
-import com.intellij.openapi.ui.ComboBox
 import com.intellij.platform.project.projectId
 import com.intellij.ui.RawCommandLineEditor
 import com.intellij.ui.components.JBCheckBox
@@ -19,6 +20,7 @@ import com.intellij.ui.components.JBTextField
 import com.intellij.ui.dsl.builder.Align
 import com.intellij.ui.dsl.builder.panel
 import com.intellij.util.ui.JBUI
+import com.intellij.util.ui.initOnShow
 import com.intellij.util.execution.ParametersListUtil
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
@@ -39,7 +41,6 @@ import plugin.lean.rpc.LeanRpcResult
 import plugin.lean.rpc.LeanToolchainApi
 import plugin.lean.rpc.ToolchainInspection
 import java.awt.BorderLayout
-import javax.swing.DefaultComboBoxModel
 import javax.swing.JButton
 
 /** Owns one editable draft and its cancellable host operations, shared by Settings and the tool window. */
@@ -58,7 +59,7 @@ internal class LeanToolchainEditor(
         emptyText.text = "Detect from ELAN_HOME and PATH"
         accessibleContext.accessibleName = "Elan executable"
     }
-    private val toolchain = ComboBox<String>().apply { isEditable = true }
+    private val toolchain = LeanToolchainComboBox()
     private val serverArguments = RawCommandLineEditor().apply {
         textField.accessibleContext.accessibleName = "Lean server arguments"
     }
@@ -103,7 +104,7 @@ internal class LeanToolchainEditor(
             }
             row("Lean toolchain:") {
                 cell(toolchain).align(Align.FILL)
-                    .comment("Blank uses the project’s lean-toolchain file or elan selection.")
+                    .comment("Automatic follows the project’s lean-toolchain file or elan selection.")
             }
             collapsibleGroup("Server and environment") {
                 row("Server arguments:") {
@@ -142,7 +143,10 @@ internal class LeanToolchainEditor(
                 inspect(configuration)
             }
         }
-        cancel.addActionListener { operation?.cancel() }
+        cancel.addActionListener {
+            background?.cancel()
+            operation?.cancel()
+        }
         updateControls()
     }
 
@@ -153,7 +157,7 @@ internal class LeanToolchainEditor(
         }
         return LeanConfiguration(
             elanExecutable = executable.text.trim(),
-            toolchain = toolchain.editor.item?.toString()?.trim().orEmpty(),
+            toolchain = toolchain.toolchainName,
             enabled = enabled.isSelected,
             serverArguments = ParametersListUtil.parse(serverArguments.text),
             environment = variables.associate { it.name to it.value },
@@ -165,7 +169,7 @@ internal class LeanToolchainEditor(
         enabled.isSelected = configuration.enabled
         enhancedHighlighting.isSelected = configuration.enhancedSemanticHighlighting
         executable.text = configuration.elanExecutable
-        toolchain.editor.item = configuration.toolchain
+        toolchain.toolchainName = configuration.toolchain
         serverArguments.text = ParametersListUtil.join(configuration.serverArguments)
         environment.setValues(configuration.environment.map { (name, value) ->
             EnvironmentVariable(name, value, false)
@@ -179,16 +183,15 @@ internal class LeanToolchainEditor(
         operation?.cancel()
         saved = null
         updateControls()
-        background = scope.launch {
+        background = initOnShow("Load Lean toolchains") {
             previous?.join()
             reportFailure {
                 perform("Reading Lean configuration…") {
                     val configuration = LeanToolchainApi.getInstance().configuration(project.projectId())
                     saved = configuration.snapshot()
-                    toolchain.model = DefaultComboBoxModel(arrayOf(""))
                     writeForm(configuration)
-                    details.text = "Inspect to view the active toolchain and installed versions on the project host."
-                    status.text = "Lean configuration loaded."
+                    status.text = "Inspecting elan…"
+                    inspect(configuration)
                 }
             }
         }
@@ -215,18 +218,20 @@ internal class LeanToolchainEditor(
 
     fun applyInBackground() {
         if (isBusy || background?.isActive == true) return
-        background = scope.launch(start = CoroutineStart.UNDISPATCHED) { reportFailure { applyChanges() } }
+        background = scope.launch(ModalityState.current().asContextElement(), start = CoroutineStart.UNDISPATCHED) {
+            reportFailure { applyChanges() }
+        }
     }
 
     private suspend fun inspect(configuration: LeanConfiguration) {
-        when (val result = LeanToolchainApi.getInstance().inspect(project.projectId(), configuration)) {
+        val result = LeanToolchainApi.getInstance().inspect(project.projectId(), configuration)
+        toolchain.showInspection(result, configuration.toolchain)
+        when (result) {
             is ToolchainInspection.Failed -> {
                 details.text = result.message
                 status.text = "Lean setup needs attention."
             }
             is ToolchainInspection.Available -> {
-                toolchain.model = DefaultComboBoxModel((listOf("") + result.installed.map { it.name }).toTypedArray())
-                toolchain.editor.item = configuration.toolchain
                 val active = when (val selection = result.active) {
                     is ActiveToolchainInfo.Available -> buildString {
                         append(selection.toolchain.name)
@@ -242,11 +247,12 @@ internal class LeanToolchainEditor(
                 status.text = "${result.installed.size} installed toolchains"
             }
         }
+        details.caretPosition = 0
     }
 
     private fun launchOperation(message: String, action: suspend () -> Unit) {
         if (isBusy || background?.isActive == true) return
-        background = scope.launch(start = CoroutineStart.UNDISPATCHED) {
+        background = scope.launch(ModalityState.current().asContextElement(), start = CoroutineStart.UNDISPATCHED) {
             reportFailure { perform(message, action) }
         }
     }
@@ -301,6 +307,7 @@ internal class LeanToolchainEditor(
     }
 
     override fun dispose() {
+        background?.cancel()
         operation?.cancel()
         scope.cancel()
     }

@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.1.1]
+
+### Fixed
+
+- The new project wizard, Lean settings, and Toolchains tab now list installed elan toolchains on opening.
+  Automatic selection shows the resolved toolchain and continues to follow the project's `lean-toolchain` file.
+- Inspect Toolchains and Template Help now show their results while the new project dialog is open.
+
 ## [0.1.0]
 
 ### Added
