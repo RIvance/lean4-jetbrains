@@ -14,6 +14,11 @@
          Guidelines: https://plugins.jetbrains.com/docs/marketplace/best-practices-for-listing.html#plugin-description -->
     <description><![CDATA[
         <p>Write Lean 4 proofs and programs in your JetBrains IDE.</p>
+        <p>
+            <img src="https://raw.githubusercontent.com/lean4-ide-tools/lean4-jetbrains/main/docs/image/screenshot.png"
+                 width="800" height="505"
+                 alt="Lean 4 with semantic highlighting, inlay hints, and InfoView in IntelliJ IDEA"/>
+        </p>
         <ul>
             <li><b>Interactive InfoView:</b> see proof goals, local hypotheses, and expected types as you move the cursor.
                 Pin proof states, inspect messages and traces, and use project widgets.</li>
