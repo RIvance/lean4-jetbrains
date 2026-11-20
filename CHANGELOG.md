@@ -14,6 +14,7 @@
 - The new project wizard, Lean settings, and Toolchains tab now list installed elan toolchains on opening.
   Automatic selection shows the resolved toolchain and continues to follow the project's `lean-toolchain` file.
 - Inspect Toolchains and Template Help now show their results while the new project dialog is open.
+- Ctrl+click on a Lean reference now opens its declaration in Rider.
 - The installer recognizes project-pinned channels during offline inspection. Toolchain discovery also recognizes
   local Lean builds selected by absolute path.
 

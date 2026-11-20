@@ -1,5 +1,6 @@
 package plugin.lean
 
+import com.intellij.codeInsight.navigation.actions.GotoDeclarationHandler
 import com.intellij.lang.LanguageBraceMatching
 import com.intellij.lang.LanguageCommenters
 import com.intellij.lang.LanguageParserDefinitions
@@ -10,6 +11,7 @@ import com.intellij.openapi.actionSystem.ActionUiKind
 import com.intellij.openapi.actionSystem.AnActionEvent
 import com.intellij.openapi.actionSystem.CommonDataKeys
 import com.intellij.openapi.actionSystem.impl.SimpleDataContext
+import com.intellij.openapi.application.ApplicationInfo
 import com.intellij.openapi.components.service
 import com.intellij.openapi.fileTypes.SyntaxHighlighterFactory
 import com.intellij.openapi.vfs.StandardFileSystems
@@ -37,6 +39,13 @@ class LeanPluginTest : BasePlatformTestCase() {
         assertNotNull(LanguageBraceMatching.INSTANCE.forLanguage(LeanLanguage))
         assertNotNull(SyntaxHighlighterFactory.getSyntaxHighlighter(LeanLanguage, project, myFixture.file.virtualFile))
         assertEquals("example (n : Nat) : n = n := by\n  rfl\n", myFixture.file.text)
+    }
+
+    fun testOnlyRiderAddsADeclarationHandlerForLean() {
+        val leanHandler = GotoDeclarationHandler.EP_NAME.extensionList.any {
+            it.javaClass.packageName.startsWith("plugin.lean.")
+        }
+        assertEquals(ApplicationInfo.getInstance().build.productCode == "RD", leanHandler)
     }
 
     fun testProjectConfigurationUsesIndependentImmutableSnapshots() {

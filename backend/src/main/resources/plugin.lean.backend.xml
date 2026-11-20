@@ -28,6 +28,7 @@
                                        implementationClass="plugin.lean.editor.LeanInlayActionHandler"/>
         <platform.rpc.backend.remoteApiProvider implementation="plugin.lean.rpc.BackendLeanApiProvider"/>
         <platform.lsp.integrationProvider implementation="plugin.lean.lsp.LeanLspIntegrationProvider"/>
+        <gotoDeclarationHandler implementation="plugin.lean.lsp.LeanGotoDeclarationHandler"/>
         <lang.importOptimizer language="Lean4" implementationClass="plugin.lean.lsp.LeanImportOptimizer"/>
         <postStartupActivity implementation="plugin.lean.lsp.LeanProjectActivity"/>
     </extensions>
