@@ -41,10 +41,9 @@ class LeanToolchainService(private val project: Project) {
             val normalized = LeanToolchainHost.normalize(configuration)
             if (normalized.enabled) {
                 runInterruptible(Dispatchers.IO) {
-                    val installation = LeanToolchainHost.discover(normalized)
                     if (normalized.toolchain.isNotEmpty()) {
-                        LeanToolchainHost.inspectState(installation, projectDirectory(), normalized).selectedToolchain()
-                    }
+                        LeanToolchainHost.resolve(projectDirectory(), normalized)
+                    } else LeanToolchainHost.discover(normalized)
                 }
             }
             normalized

@@ -39,12 +39,13 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.runInterruptible
 import kotlinx.coroutines.withContext
 import plugin.lean.language.LeanIcons
-import plugin.lean.rpc.ActiveToolchainInfo
 import plugin.lean.rpc.LeanConfiguration
 import plugin.lean.rpc.ToolchainInspection
 import plugin.lean.settings.LeanSettings
 import plugin.lean.toolchain.LeanToolchainComboBox
 import plugin.lean.toolchain.LeanToolchainHost
+import plugin.lean.toolchain.chooseLeanToolchainToInstall
+import plugin.lean.toolchain.describe
 import plugin.lean.toolchain.execute
 import java.io.IOException
 import java.nio.file.InvalidPathException
@@ -73,8 +74,9 @@ private class LeanProjectStep(private val base: NewProjectWizardBaseStep) : Abst
     // Suggestions remain editable: the selected Lake version owns the supported template identifiers.
     private val template = ComboBox(arrayOf("std", "exe", "lib", "math", "math-lax")).apply { isEditable = true }
     private val inspect = JButton("Inspect Toolchains")
+    private val install = JButton("Install Toolchain")
     private val help = JButton("Template Help")
-    private val details = JBTextArea(5, 45).apply {
+    private val details = JBTextArea(5, 32).apply {
         isEditable = false
         lineWrap = true
         wrapStyleWord = true
@@ -91,7 +93,8 @@ private class LeanProjectStep(private val base: NewProjectWizardBaseStep) : Abst
             templateHelp?.cancel()
         }
         inspect.addActionListener { inspectToolchains() }
-        toolchain.addActionListener { inspectToolchains(debounce = true) }
+        install.addActionListener { installToolchain() }
+        toolchain.onSelectionChanged { inspectToolchains(debounce = true) }
         help.addActionListener {
             templateHelp?.cancel()
             templateHelp = readSelection(
@@ -116,27 +119,47 @@ private class LeanProjectStep(private val base: NewProjectWizardBaseStep) : Abst
         inspection?.cancel()
         inspection = readSelection(
             "Inspecting installed Lean toolchains…", debounce = debounce, action = LeanToolchainHost::inspect
-        ) { result, config ->
-            toolchain.showInspection(result, config.toolchain)
-            details.text = when (result) {
-                is ToolchainInspection.Failed -> result.message
-                is ToolchainInspection.Available -> {
-                    val active = when (val selection = result.active) {
-                        is ActiveToolchainInfo.Available -> selection.toolchain.name
-                        is ActiveToolchainInfo.Unavailable -> selection.message
-                    }
-                    "Elan ${result.elanVersion} · ${result.installed.size} installed toolchains\n" +
-                        "${result.executable}\n\nToolchain for ${result.directory}\n$active"
-                }
+        ) { result, config -> showInspection(result, config) }
+    }
+
+    private fun showInspection(result: ToolchainInspection, config: LeanConfiguration) {
+        toolchain.showInspection(result, config.toolchain)
+        details.text = result.describe(config.toolchain)
+        details.caretPosition = 0
+    }
+
+    private fun installToolchain() {
+        templateHelp?.cancel()
+        inspection?.cancel()
+        val config = configuration()
+        val owner = ModalTaskOwner.component(toolchain)
+        try {
+            val target = destination()
+            val (directory, inventory) = runWithModalProgressBlocking(owner, "Checking installed Lean toolchains") {
+                val directory = runInterruptible(Dispatchers.IO) { LeanProjectInitializer.selectionDirectory(target) }
+                directory to LeanToolchainHost.inspect(directory, config)
             }
+            showInspection(inventory, config)
+            if (inventory !is ToolchainInspection.Available) return
+            val name = chooseLeanToolchainToInstall(
+                context.project, toolchain, inventory, "Install and Use"
+            ) ?: return
+            runWithModalProgressBlocking(owner, "Installing $name") {
+                LeanToolchainHost.install(directory, config, name)
+            }
+            toolchain.toolchainName = name
+            inspectToolchains()
+        } catch (error: IOException) {
+            details.text = error.message ?: "Could not install the Lean toolchain."
+            details.caretPosition = 0
+        } catch (error: InvalidPathException) {
+            details.text = "Invalid project or executable path: ${error.input}"
+            details.caretPosition = 0
         }
     }
 
     override fun setupUI(builder: Panel) {
         with(builder) {
-            row("Elan executable:") {
-                cell(executable).align(Align.FILL).comment("Blank uses automatic discovery on the project host.")
-            }
             row("Lean toolchain:") {
                 cell(toolchain).align(Align.FILL)
                     .comment("Automatic follows elan’s selection at the project location.")
@@ -161,20 +184,23 @@ private class LeanProjectStep(private val base: NewProjectWizardBaseStep) : Abst
                         }
                     }
             }
-            row("Template:") {
-                cell(template).align(Align.FILL)
-                    .comment("std: library and executable; lib: library; exe: executable.")
-            }
-            row {
-                comment("A .lean or .toml suffix selects the configuration format. Template Help shows Lake’s options.")
-            }
             row {
                 cell(inspect)
+                cell(install)
+            }
+            row("Template:") {
+                cell(template).align(Align.FILL)
                 cell(help)
             }
+            row { comment("Use std.lean or std.toml to choose the Lake file format.") }
             row { cell(JBScrollPane(details)).align(Align.FILL) }
-            row { comment("Lake generates the files and records the selected Lean version in lean-toolchain.") }
-            row { comment("Templates may initialize Git and download project dependencies, including Mathlib.") }
+            collapsibleGroup("Elan executable") {
+                row("Elan executable:") {
+                    cell(executable).align(Align.FILL).comment("Leave empty to find elan on the project host.")
+                }
+            }
+            row { comment("Lake writes the selected version to lean-toolchain.") }
+            row { comment("Some templates initialize Git and download dependencies.") }
         }
     }
 

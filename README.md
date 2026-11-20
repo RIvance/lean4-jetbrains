@@ -26,8 +26,8 @@ and import optimization require support from its language server.
 - IntelliJ IDEA, PyCharm, WebStorm, PhpStorm, RubyMine, GoLand, CLion, Rider, RustRover, DataGrip, or DataSpell.
   Supported platform builds are `261.26222` through `263.*`: generally **2026.1.4 through 2026.3**;
   DataSpell **2026.1.3.1** is also supported. Use the bundled JetBrains Runtime for InfoView.
-- [Elan](https://github.com/leanprover/elan) with `dump-state` support and an installed Lean 4 toolchain.
-  For remote development, install these on the project host.
+- [Elan](https://github.com/leanprover/elan) with `dump-state` support on the project host.
+  You can install Lean itself from the new project wizard or Lean settings.
 - Git for Git-based Lake dependencies and project templates. Fetching dependencies also requires internet access.
 
 ### Installation
@@ -38,8 +38,9 @@ and import optimization require support from its language server.
 4. Open **Settings → Languages & Frameworks → Lean** and use **Inspect** to check the active toolchain.
 5. Open a `.lean` file to start language services. InfoView opens automatically for the first selected Lean file.
 
-To create a project, choose **New Project → Lean 4**, keep **Automatic** or select an installed toolchain,
-and choose a Lake template.
+To create a project, choose **New Project → Lean 4**. Keep **Automatic** to use the toolchain elan selects
+at that location, or choose a specific version. If you need a version you haven’t installed, choose
+**Install Toolchain**, pick a release, and click **Install and Use**. Then choose a Lake template.
 **Template Help** lists the options provided by that toolchain, including the supported configuration formats.
 
 ## Working with Lean
@@ -95,16 +96,12 @@ adjust automatic conversion, and add custom translations, including multiline te
 
 ### Toolchains and server settings
 
-Manage toolchains in **Lean → Toolchains** or **Settings → Languages & Frameworks → Lean**.
-Installed toolchains load when the panel opens. **Inspect** refreshes the list and shows the active selection.
-**Install Toolchain** downloads a requested toolchain.
-Select a toolchain and apply the settings to use it in the IDE project.
+Select or install a toolchain for this project in **Lean → Toolchains** or **Settings → Languages & Frameworks → Lean**.
+**Automatic** follows elan’s selection, including the project’s `lean-toolchain` file.
+You can also use a linked toolchain or an absolute path to a local Lean build.
 
-Toolchain selections apply to this IDE project only. Choose **Automatic** to follow elan's normal rules,
-including the project's `lean-toolchain` file. Elan is discovered through `ELAN_HOME`, `PATH`, or its default home;
-you can also select its executable explicitly in settings. Linked toolchains are supported.
-
-Configure additional Lean server arguments and project environment variables under **Server and environment**.
+Open **Elan and server options** to set the elan executable, semantic highlighting, server arguments, or
+project environment variables. By default, the plugin finds elan through `ELAN_HOME`, `PATH`, or its default home.
 Lake run configurations can override environment variables and toolchain selection for individual runs.
 
 ### Building and running projects
@@ -150,6 +147,8 @@ bullet. You can find Lean commands through **Find Action** and assign shortcuts 
 
 ## Troubleshooting
 
+- With Lean 4.0.0, Lake's `std` template can give a library and an executable the same name.
+  If Lake reports “has already been declared” for a new project, use a lowercase project name.
 - **Lean does not start:** use **Inspect** in Lean settings to check elan and the selected toolchain. Set the elan
   executable explicitly if discovery fails. The IDE's **Language Services** status widget shows server state and
   error output.

@@ -37,6 +37,13 @@ final class ElanInstallation private (
     command(directory, List("dump-state", "--no-net"), selection)
   }
 
+  def selectedToolchain(state: ElanState): SelectedToolchain = state.selectedToolchain { directory =>
+    val binary = directory.resolve("bin").resolve(if windows then "lean.exe" else "lean")
+    if !Files.isRegularFile(binary) || (!windows && !Files.isExecutable(binary)) then {
+      throw new ToolchainUnavailableException(s"Cannot find an executable Lean binary at '$binary'.")
+    }
+  }
+
   def install(directory: Path, toolchain: String): ToolCommand = {
     validateToolchainName(toolchain)
     command(directory, List("toolchain", "install", "--", toolchain), Optional.empty())

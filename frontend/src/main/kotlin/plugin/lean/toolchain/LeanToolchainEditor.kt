@@ -10,6 +10,7 @@ import com.intellij.openapi.diagnostic.logger
 import com.intellij.openapi.progress.ProcessCanceledException
 import com.intellij.openapi.project.Project
 import com.intellij.platform.project.projectId
+import com.intellij.ui.DocumentAdapter
 import com.intellij.ui.RawCommandLineEditor
 import com.intellij.ui.components.JBCheckBox
 import com.intellij.ui.components.JBLabel
@@ -30,11 +31,11 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.job
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import plugin.lean.rpc.ActiveToolchainInfo
 import plugin.lean.rpc.LeanConfiguration
 import plugin.lean.rpc.LeanConfigurationUpdate
 import plugin.lean.rpc.LeanRpcResult
@@ -42,6 +43,7 @@ import plugin.lean.rpc.LeanToolchainApi
 import plugin.lean.rpc.ToolchainInspection
 import java.awt.BorderLayout
 import javax.swing.JButton
+import javax.swing.event.DocumentEvent
 
 /** Owns one editable draft and its cancellable host operations, shared by Settings and the tool window. */
 internal class LeanToolchainEditor(
@@ -69,7 +71,7 @@ internal class LeanToolchainEditor(
         tableView.preferredScrollableViewportSize = JBUI.size(350, 100)
         tableView.putClientProperty("terminateEditOnFocusLost", true)
     }
-    private val details = JBTextArea(6, 40).apply {
+    private val details = JBTextArea(5, 32).apply {
         isEditable = false
         lineWrap = true
         wrapStyleWord = true
@@ -81,6 +83,7 @@ internal class LeanToolchainEditor(
     private val install = JButton("Install Toolchain")
     private val cancel = JButton("Cancel Operation")
     private var saved: LeanConfiguration? = null
+    private var preview: Job? = null
     private var background: Job? = null
     private var operation: Job? = null
 
@@ -95,18 +98,23 @@ internal class LeanToolchainEditor(
     init {
         layout = BorderLayout(0, JBUI.scale(12))
         add(panel {
-            row { cell(enabled) }
-            row {
-                cell(enhancedHighlighting).comment("Automatically uses standard highlighting on other toolchains.")
-            }
-            row("Elan executable:") {
-                cell(executable).align(Align.FILL).comment("Path on the project host. Blank uses automatic discovery.")
-            }
             row("Lean toolchain:") {
                 cell(toolchain).align(Align.FILL)
                     .comment("Automatic follows the project’s lean-toolchain file or elan selection.")
             }
-            collapsibleGroup("Server and environment") {
+            row {
+                cell(inspect)
+                cell(install)
+                cell(cancel)
+            }
+            row { cell(status) }
+            row { cell(JBScrollPane(details)).align(Align.FILL) }.resizableRow()
+            row { cell(enabled) }
+            collapsibleGroup("Elan and server options") {
+                row("Elan executable:") {
+                    cell(executable).align(Align.FILL).comment("Leave empty to find elan on the project host.")
+                }
+                row { cell(enhancedHighlighting) }
                 row("Server arguments:") {
                     cell(serverArguments).align(Align.FILL)
                         .comment("Additional Lean server arguments. Quote values containing spaces.")
@@ -117,31 +125,16 @@ internal class LeanToolchainEditor(
                     comment("Override the project host’s environment for elan, Lean, and Lake. Values are literal.")
                 }
             }
-            row { comment("These preferences apply to this IDE project. Applying changes restarts its Lean servers.") }
-            row {
-                comment("Inspect lists installed toolchains. Installation takes effect even if you cancel Settings.")
-            }
-            row {
-                cell(inspect)
-                cell(install)
-                cell(cancel)
-            }
-        }, BorderLayout.NORTH)
-        add(JBScrollPane(details), BorderLayout.CENTER)
-        add(status, BorderLayout.SOUTH)
+        }, BorderLayout.CENTER)
+        toolchain.onSelectionChanged { previewSelection() }
+        executable.document.addDocumentListener(object : DocumentAdapter() {
+            override fun textChanged(event: DocumentEvent) = previewSelection()
+        })
         inspect.addActionListener {
             launchOperation("Inspecting elan…") { inspect(readForm()) }
         }
         install.addActionListener {
-            launchOperation("Installing Lean toolchain…") {
-                val configuration = readForm()
-                if (configuration.toolchain.isBlank()) throw Failure("Enter a toolchain name to install.")
-                val result = LeanToolchainApi.getInstance().install(
-                    project.projectId(), configuration, configuration.toolchain
-                )
-                if (result is LeanRpcResult.Failure) throw Failure(result.message)
-                inspect(configuration)
-            }
+            launchOperation("Checking installed toolchains…") { chooseAndInstall(readForm()) }
         }
         cancel.addActionListener {
             background?.cancel()
@@ -180,6 +173,7 @@ internal class LeanToolchainEditor(
     fun reset() {
         val previous = background
         previous?.cancel()
+        preview?.cancel()
         operation?.cancel()
         saved = null
         updateControls()
@@ -190,7 +184,8 @@ internal class LeanToolchainEditor(
                     val configuration = LeanToolchainApi.getInstance().configuration(project.projectId())
                     saved = configuration.snapshot()
                     writeForm(configuration)
-                    status.text = "Inspecting elan…"
+                    updateControls()
+                    showStatus("Inspecting elan…")
                     inspect(configuration)
                 }
             }
@@ -205,8 +200,7 @@ internal class LeanToolchainEditor(
                 is LeanConfigurationUpdate.Applied -> {
                     saved = result.configuration.snapshot()
                     writeForm(result.configuration)
-                    details.text = "Inspect to refresh toolchain details for the saved configuration."
-                    status.text = "Lean configuration applied."
+                    scheduleInspection("Settings saved.", ModalityState.stateForComponent(this))
                 }
                 is LeanConfigurationUpdate.Conflict -> throw Failure(
                     "Lean settings changed in another window. Reset to reload them before applying your changes."
@@ -223,31 +217,63 @@ internal class LeanToolchainEditor(
         }
     }
 
-    private suspend fun inspect(configuration: LeanConfiguration) {
-        val result = LeanToolchainApi.getInstance().inspect(project.projectId(), configuration)
-        toolchain.showInspection(result, configuration.toolchain)
-        when (result) {
-            is ToolchainInspection.Failed -> {
-                details.text = result.message
-                status.text = "Lean setup needs attention."
-            }
-            is ToolchainInspection.Available -> {
-                val active = when (val selection = result.active) {
-                    is ActiveToolchainInfo.Available -> buildString {
-                        append(selection.toolchain.name)
-                        if (selection.cached) append(" (cached channel resolution)")
-                        append("\n").append(selection.toolchain.path)
-                    }
-                    is ActiveToolchainInfo.Unavailable -> selection.message
-                }
-                details.text = buildString {
-                    append("Elan ${result.elanVersion}\n${result.executable}\n\n")
-                    append("Toolchain for ${result.directory}\n$active")
-                }
-                status.text = "${result.installed.size} installed toolchains"
+    private suspend fun chooseAndInstall(configuration: LeanConfiguration) {
+        val api = LeanToolchainApi.getInstance()
+        val projectId = project.projectId()
+        val inventory = when (val result = api.inspect(projectId, configuration)) {
+            is ToolchainInspection.Available -> result
+            is ToolchainInspection.Failed -> throw Failure(result.message)
+        }
+        val name = chooseLeanToolchainToInstall(project, this, inventory)
+        if (name == null) {
+            showStatus("Installation cancelled.")
+            return
+        }
+        currentCoroutineContext().ensureActive()
+        showStatus("Installing $name…")
+        val result = api.install(projectId, configuration, name)
+        if (result is LeanRpcResult.Failure) throw Failure(result.message)
+        scheduleInspection("Installed $name.")
+    }
+
+    private fun previewSelection() {
+        if (isLoaded && !isBusy) scheduleInspection()
+    }
+
+    /** A preview belongs to the editor. A committed change can finish even while its refresh is pending. */
+    private fun scheduleInspection(notice: String = "", modality: ModalityState = ModalityState.current()) {
+        preview?.cancel()
+        showStatus(notice.ifEmpty { "Inspecting selection…" })
+        details.text = ""
+        preview = scope.launch(modality.asContextElement()) {
+            delay(200)
+            reportFailure {
+                val configuration = readForm()
+                val result = LeanToolchainApi.getInstance().inspect(project.projectId(), configuration)
+                ensureActive()
+                if (configuration == readForm()) {
+                    showInspection(result, configuration.toolchain)
+                    showStatus(notice)
+                } else showStatus("Use Inspect to check the edited configuration.")
             }
         }
+    }
+
+    private suspend fun inspect(configuration: LeanConfiguration) {
+        val result = LeanToolchainApi.getInstance().inspect(project.projectId(), configuration)
+        showInspection(result, configuration.toolchain)
+    }
+
+    private fun showInspection(result: ToolchainInspection, selection: String) {
+        toolchain.showInspection(result, selection)
+        details.text = result.describe(selection)
         details.caretPosition = 0
+        showStatus("")
+    }
+
+    private fun showStatus(message: String) {
+        status.text = message
+        status.isVisible = message.isNotEmpty()
     }
 
     private fun launchOperation(message: String, action: suspend () -> Unit) {
@@ -260,18 +286,19 @@ internal class LeanToolchainEditor(
     private suspend fun perform(message: String, action: suspend () -> Unit) = withContext(Dispatchers.EDT) {
         scope.coroutineContext.ensureActive()
         if (isBusy) throw Failure("Finish or cancel the current Lean operation before applying settings.")
+        preview?.cancel()
         environment.stopEditing()
         operation = currentCoroutineContext().job
         updateControls()
         firePropertyChange("busy", false, true)
-        status.text = message
+        showStatus(message)
         try {
             action()
         } catch (error: Exception) {
-            status.text = when (error) {
+            showStatus(when (error) {
                 is CancellationException, is ProcessCanceledException -> "Cancelled."
                 else -> "Lean operation failed."
-            }
+            })
             throw error
         } finally {
             operation = null
@@ -289,11 +316,13 @@ internal class LeanToolchainEditor(
             throw error
         } catch (error: Failure) {
             details.text = error.message
-            status.text = "Lean settings need attention."
+            details.caretPosition = 0
+            showStatus("Lean settings need attention.")
         } catch (error: Exception) {
             logger<LeanToolchainEditor>().warn("Lean configuration operation failed", error)
             details.text = "Could not complete the Lean configuration operation. See the IDE log for details."
-            status.text = "Lean configuration is unavailable."
+            details.caretPosition = 0
+            showStatus("Lean configuration is unavailable.")
         }
     }
 
@@ -303,7 +332,7 @@ internal class LeanToolchainEditor(
             it.isEnabled = available
         }
         if (available) environment.setEnabled() else environment.setDisabled()
-        cancel.isEnabled = isBusy
+        cancel.isVisible = isBusy && isLoaded
     }
 
     override fun dispose() {

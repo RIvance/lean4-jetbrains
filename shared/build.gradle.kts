@@ -5,6 +5,7 @@ dependencies {
     compileOnly(project(":tooling"))
     compileOnly(libs.kotlin.serialization.json.jvm)
     testImplementation("junit:junit:4.13.2")
+    testImplementation(project(":tooling"))
     intellijPlatform {
         testFramework(TestFrameworkType.Platform)
     }

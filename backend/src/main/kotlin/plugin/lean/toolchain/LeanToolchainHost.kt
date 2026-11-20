@@ -9,6 +9,7 @@ import plugin.lean.rpc.ActiveToolchainInfo
 import plugin.lean.rpc.InstalledToolchainInfo
 import plugin.lean.rpc.LeanConfiguration
 import plugin.lean.rpc.ToolchainInspection
+import plugin.lean.rpc.ToolchainSelectionOrigin
 import plugin.lean.tooling.ElanInstallation
 import plugin.lean.tooling.ElanNotFoundException
 import plugin.lean.tooling.ElanState
@@ -70,7 +71,7 @@ internal object LeanToolchainHost {
     ): ResolvedLeanToolchain {
         val installation = discover(configuration, environment)
         val state = inspectState(installation, directory, configuration)
-        return ResolvedLeanToolchain(installation, state.selectedToolchain().toolchain())
+        return ResolvedLeanToolchain(installation, installation.selectedToolchain(state).toolchain())
     }
 
     suspend fun inspect(directory: Path, configuration: LeanConfiguration): ToolchainInspection =
@@ -80,18 +81,25 @@ internal object LeanToolchainHost {
                 val installation = discover(normalized)
                 val state = inspectState(installation, directory, normalized)
                 val active = try {
-                    val selected = state.selectedToolchain()
+                    val selected = installation.selectedToolchain(state)
                     val toolchain = selected.toolchain()
                     ActiveToolchainInfo.Available(
                         InstalledToolchainInfo(toolchain.name(), toolchain.path().toString()),
                         selected.source() == ResolutionSource.CACHE
                     )
                 } catch (error: ToolchainUnavailableException) {
-                    ActiveToolchainInfo.Unavailable(error.message ?: "No active Lean toolchain")
+                    ActiveToolchainInfo.Unavailable(
+                        error.message ?: "No active Lean toolchain", error.installTarget().orElse(null)
+                    )
                 }
                 ToolchainInspection.Available(
                     installation.executable().toString(), state.version(), directory.toString(),
-                    state.installedToolchains().map { InstalledToolchainInfo(it.name(), it.path().toString()) }, active
+                    state.installedToolchains().map {
+                        InstalledToolchainInfo(it.name(), it.path().toString())
+                    }, active,
+                    state.selectionOrigin().map {
+                        ToolchainSelectionOrigin(it.kind(), it.location().orElse(null))
+                    }.orElse(null)
                 )
             } catch (error: IOException) {
                 ToolchainInspection.Failed(error.message ?: "Could not inspect elan")
@@ -125,7 +133,7 @@ internal object LeanToolchainHost {
         throw IOException("Invalid elan path: ${error.input}", error)
     }
 
-    fun inspectState(
+    private fun inspectState(
         installation: ElanInstallation,
         directory: Path,
         configuration: LeanConfiguration

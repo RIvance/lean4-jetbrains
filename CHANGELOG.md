@@ -2,11 +2,20 @@
 
 ## [0.1.1]
 
+### Added
+
+- A searchable toolchain installer in New Project, Lean settings, and the Toolchains tab. It marks installed
+  releases and offers the project's missing version first. The wizard can install and select a toolchain in one step.
+- Toolchain details show what selected the version, including the exact toolchain file when available.
+  Changing the selection in settings previews the result before applying it.
+
 ### Fixed
 
 - The new project wizard, Lean settings, and Toolchains tab now list installed elan toolchains on opening.
   Automatic selection shows the resolved toolchain and continues to follow the project's `lean-toolchain` file.
 - Inspect Toolchains and Template Help now show their results while the new project dialog is open.
+- The installer recognizes project-pinned channels during offline inspection. Toolchain discovery also recognizes
+  local Lean builds selected by absolute path.
 
 ## [0.1.0]
 

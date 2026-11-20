@@ -6,6 +6,7 @@ import fleet.rpc.RemoteApi
 import fleet.rpc.Rpc
 import fleet.rpc.remoteApiDescriptor
 import kotlinx.serialization.Serializable
+import plugin.lean.tooling.ElanSelectionKind
 
 @Serializable
 data class LeanConfiguration(
@@ -39,12 +40,15 @@ sealed interface LeanConfigurationUpdate {
 data class InstalledToolchainInfo(val name: String, val path: String)
 
 @Serializable
+data class ToolchainSelectionOrigin(val kind: ElanSelectionKind, val location: String? = null)
+
+@Serializable
 sealed interface ActiveToolchainInfo {
     @Serializable
     data class Available(val toolchain: InstalledToolchainInfo, val cached: Boolean) : ActiveToolchainInfo
 
     @Serializable
-    data class Unavailable(val message: String) : ActiveToolchainInfo
+    data class Unavailable(val message: String, val installTarget: String? = null) : ActiveToolchainInfo
 }
 
 @Serializable
@@ -55,7 +59,8 @@ sealed interface ToolchainInspection {
         val elanVersion: String,
         val directory: String,
         val installed: List<InstalledToolchainInfo>,
-        val active: ActiveToolchainInfo
+        val active: ActiveToolchainInfo,
+        val origin: ToolchainSelectionOrigin? = null
     ) : ToolchainInspection
 
     @Serializable

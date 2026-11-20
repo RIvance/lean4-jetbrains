@@ -4,6 +4,8 @@ import com.intellij.openapi.application.impl.LaterInvocator
 import com.intellij.openapi.components.service
 import com.intellij.openapi.options.Configurable
 import com.intellij.openapi.options.ConfigurationException
+import com.intellij.openapi.ui.DialogWrapper
+import com.intellij.openapi.util.io.FileUtil
 import com.intellij.testFramework.PlatformTestUtil
 import com.intellij.testFramework.fixtures.BasePlatformTestCase
 import com.intellij.ui.ComponentUtil
@@ -16,6 +18,7 @@ import com.intellij.util.ui.forceRespectIsShowingClientProperty
 import plugin.lean.rpc.LeanConfiguration
 import plugin.lean.settings.LeanProjectConfigurable
 import plugin.lean.settings.LeanSettings
+import java.nio.file.Files
 import java.nio.file.Path
 import javax.swing.JComponent
 import javax.swing.JComboBox
@@ -106,6 +109,42 @@ class LeanProjectSettingsTest : BasePlatformTestCase() {
         assertEquals(saved, settings.configuration)
     }
 
+    fun testSelectionPreviewsTheNewVersionAndItsSourceWithoutChangingSavedSettings() {
+        withTestElan { directory, saved ->
+            withEditor { configurable, component, _ ->
+                val details = UIUtil.findComponentsOfType(component, JBTextArea::class.java).single()
+                val toolchain = UIUtil.findComponentsOfType(component, JComboBox::class.java).single()
+                val pin = directory.resolve("lean-toolchain").toString()
+                assertTrue(details.text, details.text.contains(pin))
+                LaterInvocator.enterModal(component)
+                try {
+                    toolchain.selectedItem = "linked"
+                    PlatformTestUtil.waitWithEventsDispatching("Selected toolchain was not previewed", {
+                        details.text.startsWith("Selected toolchain · linked") && details.text.contains("explicitly")
+                    }, 10)
+                    assertEquals(saved, settings.configuration)
+                    assertTrue(configurable.isModified)
+                    val field = toolchain.editor.editorComponent as JBTextField
+                    field.text = " custom-channel "
+                    field.caretPosition = 3
+                    PlatformTestUtil.waitWithEventsDispatching("Typed toolchain was not previewed", {
+                        details.text.contains("custom-channel") && details.text.contains("not installed")
+                    }, 10)
+                    assertEquals(" custom-channel ", field.text)
+                    assertEquals(3, field.caretPosition)
+                    toolchain.selectedItem = ""
+                    PlatformTestUtil.waitWithEventsDispatching("Automatic did not restore the pinned version", {
+                        details.text.startsWith("Selected toolchain · release") && details.text.contains(pin)
+                    }, 10)
+                    assertEquals(saved, settings.configuration)
+                    assertFalse(configurable.isModified)
+                } finally {
+                    LaterInvocator.leaveModal(component)
+                }
+            }
+        }
+    }
+
     fun testServerArgumentsAndEnvironmentApplyAndResetThroughNativeSettingsControls() {
         settings.update(settings.configuration.copy(environment = mapOf("LEAN_SAMPLE" to "saved")))
         withEditor { configurable, component, executable ->
@@ -125,6 +164,43 @@ class LeanProjectSettingsTest : BasePlatformTestCase() {
             waitForLoad(executable)
             assertFalse(configurable.isModified)
             assertEquals(saved.environment["LEAN_SAMPLE"], environment.getValueAt(0, 1))
+        }
+    }
+
+    fun testCancellingAnActiveDownloadRestoresTheDraftAndARetryUsesTheOriginalProjectPin() {
+        withTestElan("custom-channel") { directory, saved ->
+            withEditor { configurable, component, _ ->
+                interceptToolchainInstaller(testRootDisposable) { dialog ->
+                    assertTrue(dialog.isOKActionEnabled)
+                    dialog.close(DialogWrapper.OK_EXIT_CODE)
+                }
+                val buttons = UIUtil.findComponentsOfType(component, JButton::class.java)
+                val install = buttons.single { it.text == "Install Toolchain" }
+                val cancel = buttons.single { it.text == "Cancel Operation" }
+                val details = UIUtil.findComponentsOfType(component, JBTextArea::class.java).single()
+                val toolchain = UIUtil.findComponentsOfType(component, JComboBox::class.java).single()
+                val installed = directory.resolve("installed")
+                val pause = Files.createFile(directory.resolve("pause-install"))
+                install.doClick()
+                PlatformTestUtil.waitWithEventsDispatching("The host did not start the download", {
+                    Files.exists(directory.resolve("install-started")) && cancel.isVisible
+                }, 10)
+                cancel.doClick()
+                PlatformTestUtil.waitWithEventsDispatching("Cancelled download did not release the controls", {
+                    install.isEnabled && !cancel.isVisible
+                }, 10)
+                assertFalse(Files.exists(installed))
+                assertEquals("", toolchain.editor.item)
+                Files.delete(pause)
+                install.doClick()
+                PlatformTestUtil.waitWithEventsDispatching("Retry did not refresh the installed project pin", {
+                    install.isEnabled && details.text.startsWith("Selected toolchain · custom-channel")
+                }, 10)
+                assertEquals("custom-channel", Files.readString(installed).trim())
+                assertEquals(saved, settings.configuration)
+                assertEquals("", toolchain.editor.item)
+                assertFalse(configurable.isModified)
+            }
         }
     }
 
@@ -188,16 +264,18 @@ class LeanProjectSettingsTest : BasePlatformTestCase() {
             assertTrue(details.text, details.text.contains(saved.elanExecutable))
             val missing = Path.of(myFixture.tempDirFixture.tempDirPath, "missing-elan").toString()
             executable.text = missing
-            UIUtil.findComponentsOfType(component, JComboBox::class.java).single().editor.item = "local-build"
+            val toolchain = UIUtil.findComponentsOfType(component, JComboBox::class.java).single()
+            assertEquals("", toolchain.editor.item)
             val buttons = UIUtil.findComponentsOfType(component, JButton::class.java)
             LaterInvocator.enterModal(component)
             try {
-                for (label in listOf("Inspect", "Install Toolchain")) {
+                for (label in listOf("Install Toolchain", "Inspect")) {
                     val button = buttons.single { it.text == label }
                     button.doClick()
                     PlatformTestUtil.waitWithEventsDispatching("$label did not finish", { button.isEnabled }, 10)
                     assertTrue(details.text, details.text.contains(missing))
                     assertEquals(saved, settings.configuration)
+                    assertEquals("", toolchain.editor.item)
                     assertEquals(missing, executable.text)
                     assertTrue(configurable.isModified)
                 }
@@ -223,6 +301,22 @@ class LeanProjectSettingsTest : BasePlatformTestCase() {
         }
         UIUtil.dispatchAllInvocationEvents()
         assertEquals("/saved/elan", settings.configuration.elanExecutable)
+    }
+
+    private fun withTestElan(defaultName: String = "release", action: (Path, LeanConfiguration) -> Unit) {
+        val directory = Files.createTempDirectory("lean settings ")
+        // Light projects can exist only in the test VFS. Elan needs a physical working directory.
+        val projectDirectory = Path.of(checkNotNull(project.basePath))
+        val created = Files.notExists(projectDirectory)
+        if (created) Files.createDirectories(projectDirectory)
+        try {
+            val elan = createTestElan(directory, defaultName)
+            settings.update(settings.configuration.copy(elanExecutable = elan.toString()))
+            action(directory, settings.configuration)
+        } finally {
+            FileUtil.delete(directory.toFile())
+            if (created) Files.deleteIfExists(projectDirectory)
+        }
     }
 
     private fun withEditor(action: (LeanProjectConfigurable, JComponent, JBTextField) -> Unit) {

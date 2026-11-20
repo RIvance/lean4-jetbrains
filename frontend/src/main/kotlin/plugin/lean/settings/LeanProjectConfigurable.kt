@@ -93,7 +93,7 @@ private class LeanProjectSettingsPanel(
                 row { cell(autoOpen) }
                 row { comment("Opens once per project session without moving focus away from the editor.") }
             }
-        }, BorderLayout.NORTH)
+        }, BorderLayout.SOUTH)
         add(toolchain, BorderLayout.CENTER)
     }
 
